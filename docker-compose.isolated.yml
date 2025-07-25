@@ -1,0 +1,255 @@
+version: '3.8'
+
+# Isolated network architecture for maximum security
+# Each component runs in its own network segment
+
+services:
+  # Frontend/API Gateway (future use)
+  gateway:
+    image: nginx:alpine
+    container_name: linknode-gateway
+    profiles: ["full"]
+    
+    networks:
+      - dmz_net
+      - scanner_net
+    
+    ports:
+      - "127.0.0.1:8443:443"
+    
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - NET_BIND_SERVICE
+    
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+
+  # ZAP in isolated network
+  zap-isolated:
+    extends:
+      file: docker-compose.secure.yml
+      service: zap
+    
+    networks:
+      - zap_net
+    
+    # No external ports exposed
+    ports: []
+
+  # Scanner with network isolation
+  scanner-isolated:
+    extends:
+      file: docker-compose.secure.yml
+      service: scanner
+    
+    networks:
+      - scanner_net
+      - zap_net
+      - target_net
+    
+    # Network aliases for service discovery
+    networks:
+      scanner_net:
+        aliases:
+          - scanner
+      zap_net:
+        aliases:
+          - scanner-client
+
+  # WhatWeb service (isolated)
+  whatweb:
+    build:
+      context: .
+      dockerfile: Dockerfile.tools
+      target: whatweb
+    
+    image: ${REGISTRY_PREFIX:-ghcr.io/murr2k}/whatweb:latest
+    container_name: linknode-whatweb
+    
+    user: nobody
+    read_only: true
+    
+    networks:
+      - tools_net
+      - target_net
+    
+    cap_drop:
+      - ALL
+    
+    security_opt:
+      - no-new-privileges:true
+    
+    tmpfs:
+      - /tmp:size=50M
+    
+    command: ["sleep", "infinity"]  # Keep alive for scanner to use
+
+  # Nikto service (isolated)
+  nikto:
+    build:
+      context: .
+      dockerfile: Dockerfile.tools
+      target: nikto
+    
+    image: ${REGISTRY_PREFIX:-ghcr.io/murr2k}/nikto:latest
+    container_name: linknode-nikto
+    
+    user: nobody
+    read_only: true
+    
+    networks:
+      - tools_net
+      - target_net
+    
+    cap_drop:
+      - ALL
+    
+    security_opt:
+      - no-new-privileges:true
+    
+    tmpfs:
+      - /tmp:size=50M
+    
+    command: ["sleep", "infinity"]  # Keep alive for scanner to use
+
+  # Results processor (isolated)
+  processor:
+    build:
+      context: .
+      dockerfile: Dockerfile.secure
+    
+    image: ${REGISTRY_PREFIX:-ghcr.io/murr2k}/linknode-processor:latest
+    container_name: linknode-processor
+    profiles: ["full"]
+    
+    user: scanner
+    read_only: true
+    
+    networks:
+      - scanner_net
+      - storage_net
+    
+    volumes:
+      - type: bind
+        source: ./results
+        target: /results
+        read_only: false
+    
+    cap_drop:
+      - ALL
+    
+    security_opt:
+      - no-new-privileges:true
+    
+    environment:
+      - PROCESSOR_MODE=async
+      - MAX_WORKERS=2
+
+  # Optional: Local target for testing (isolated)
+  test-target:
+    image: vulnerables/web-dvwa:latest
+    container_name: linknode-test-target
+    profiles: ["test"]
+    
+    networks:
+      - target_net
+    
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run
+      - /var/lib/mysql
+
+networks:
+  # DMZ network for external-facing services
+  dmz_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+    driver_opts:
+      com.docker.network.bridge.name: br-dmz
+  
+  # Scanner control network
+  scanner_net:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.21.0.0/24
+  
+  # ZAP isolated network
+  zap_net:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.22.0.0/24
+  
+  # Tools network (WhatWeb, Nikto)
+  tools_net:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.23.0.0/24
+  
+  # Target network (outbound only)
+  target_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.24.0.0/24
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "false"  # Disable inter-container communication
+  
+  # Storage network
+  storage_net:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.25.0.0/24
+
+# Network policies (requires Docker EE or Kubernetes)
+# These are documented for reference
+x-network-policies:
+  scanner-policy:
+    ingress:
+      - from:
+          - podSelector:
+              matchLabels:
+                app: gateway
+        ports:
+          - protocol: TCP
+            port: 8000
+    egress:
+      - to:
+          - podSelector:
+              matchLabels:
+                app: zap
+        ports:
+          - protocol: TCP
+            port: 8080
+      - to:
+          - namespaceSelector: {}
+        ports:
+          - protocol: TCP
+            port: 443
+          - protocol: TCP
+            port: 80

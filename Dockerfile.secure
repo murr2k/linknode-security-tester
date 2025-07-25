@@ -1,0 +1,116 @@
+# Secure multi-stage Dockerfile for Linknode Security Tester
+# Stage 1: Build dependencies and tools
+FROM python:3.11-slim as builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create build directory
+WORKDIR /build
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Install Python dependencies in a virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Stage 2: Build security tools
+FROM ubuntu:22.04 as tools-builder
+
+# Install tool dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    ruby \
+    ruby-dev \
+    perl \
+    libnet-ssleay-perl \
+    libcurl4-openssl-dev \
+    make \
+    build-essential \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Build WhatWeb
+RUN git clone --depth 1 https://github.com/urbanadventurer/WhatWeb.git /opt/whatweb && \
+    cd /opt/whatweb && \
+    bundle install --without test development
+
+# Build Nikto
+RUN git clone --depth 1 https://github.com/sullo/nikto.git /opt/nikto
+
+# Stage 3: Final minimal runtime image
+FROM python:3.11-slim
+
+# Security: Create non-root user
+RUN groupadd -r scanner -g 1001 && \
+    useradd -r -g scanner -u 1001 -m -s /bin/bash scanner
+
+# Install minimal runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ruby \
+    perl \
+    libnet-ssleay-perl \
+    libcurl4 \
+    ca-certificates \
+    tini \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean \
+    && rm -rf /var/tmp/* /tmp/*
+
+# Copy Python virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Copy security tools from tools-builder
+COPY --from=tools-builder --chown=scanner:scanner /opt/whatweb /opt/whatweb
+COPY --from=tools-builder --chown=scanner:scanner /opt/nikto /opt/nikto
+
+# Create necessary directories with proper permissions
+RUN mkdir -p /app /results /tmp/scanner && \
+    chown -R scanner:scanner /app /results /tmp/scanner
+
+# Set up tool symlinks
+RUN ln -s /opt/whatweb/whatweb /usr/local/bin/whatweb && \
+    ln -s /opt/nikto/program/nikto.pl /usr/local/bin/nikto && \
+    chmod +x /usr/local/bin/whatweb /usr/local/bin/nikto
+
+# Copy application code
+WORKDIR /app
+COPY --chown=scanner:scanner . .
+
+# Security: Set environment variables
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    TMPDIR=/tmp/scanner
+
+# Security: Drop all capabilities and add only what's needed
+USER scanner
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD python -c "import sys; sys.exit(0)" || exit 1
+
+# Use tini for proper signal handling
+ENTRYPOINT ["tini", "--"]
+
+# Default command
+CMD ["python", "main.py", "--help"]
+
+# Security labels
+LABEL maintainer="murr2k@gmail.com" \
+      org.opencontainers.image.source="https://github.com/murr2k/linknode-security-tester" \
+      org.opencontainers.image.description="Secure web application security scanner" \
+      org.opencontainers.image.licenses="MIT" \
+      security.scan="enabled" \
+      security.nonroot="true"

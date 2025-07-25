@@ -1,0 +1,152 @@
+# Multi-stage Dockerfile for individual security tools
+# Each tool in its own minimal container
+
+# Base stage for common dependencies
+FROM alpine:3.19 as base
+RUN apk add --no-cache ca-certificates
+
+# WhatWeb stage
+FROM ruby:3.2-alpine as whatweb
+
+# Install dependencies
+RUN apk add --no-cache \
+    git \
+    make \
+    gcc \
+    musl-dev \
+    libcurl \
+    curl-dev
+
+# Clone and setup WhatWeb
+RUN git clone --depth 1 https://github.com/urbanadventurer/WhatWeb.git /opt/whatweb && \
+    cd /opt/whatweb && \
+    bundle install --without test development && \
+    # Remove unnecessary files
+    rm -rf .git .gitignore README* CHANGELOG* tests/
+
+# Create minimal runtime
+FROM ruby:3.2-alpine as whatweb-runtime
+
+RUN apk add --no-cache \
+    libcurl \
+    ca-certificates && \
+    adduser -D -s /bin/ash scanner
+
+COPY --from=whatweb --chown=scanner:scanner /opt/whatweb /opt/whatweb
+
+USER scanner
+WORKDIR /opt/whatweb
+
+ENTRYPOINT ["./whatweb"]
+
+# Nikto stage
+FROM perl:5.38-slim as nikto
+
+# Install dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    git \
+    libnet-ssleay-perl \
+    libssl-dev \
+    ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# Clone Nikto
+RUN git clone --depth 1 https://github.com/sullo/nikto.git /opt/nikto && \
+    cd /opt/nikto && \
+    rm -rf .git .gitignore
+
+# Create minimal runtime
+FROM perl:5.38-slim as nikto-runtime
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    libnet-ssleay-perl \
+    libssl3 \
+    ca-certificates && \
+    rm -rf /var/lib/apt/lists/* && \
+    useradd -r -m -s /bin/bash scanner
+
+COPY --from=nikto --chown=scanner:scanner /opt/nikto /opt/nikto
+
+USER scanner
+WORKDIR /opt/nikto/program
+
+ENTRYPOINT ["./nikto.pl"]
+
+# NMAP stage (optional, for network scanning)
+FROM alpine:3.19 as nmap
+
+RUN apk add --no-cache \
+    nmap \
+    nmap-scripts \
+    ca-certificates && \
+    adduser -D -s /bin/ash scanner && \
+    # Remove unnecessary scripts to reduce attack surface
+    find /usr/share/nmap/scripts -name "*brute*" -delete && \
+    find /usr/share/nmap/scripts -name "*dos*" -delete
+
+USER scanner
+
+ENTRYPOINT ["nmap"]
+
+# SQLMap stage (optional, for SQL injection testing)
+FROM python:3.11-alpine as sqlmap
+
+RUN apk add --no-cache \
+    git \
+    ca-certificates && \
+    git clone --depth 1 https://github.com/sqlmapproject/sqlmap.git /opt/sqlmap && \
+    rm -rf /opt/sqlmap/.git && \
+    adduser -D -s /bin/ash scanner && \
+    chown -R scanner:scanner /opt/sqlmap
+
+USER scanner
+WORKDIR /opt/sqlmap
+
+ENTRYPOINT ["python", "sqlmap.py"]
+
+# Dirb stage (directory brute-forcing)
+FROM alpine:3.19 as dirb
+
+RUN apk add --no-cache \
+    curl \
+    ca-certificates && \
+    adduser -D -s /bin/ash scanner
+
+# Use gobuster instead (more modern, written in Go)
+RUN wget https://github.com/OJ/gobuster/releases/latest/download/gobuster-linux-amd64 -O /usr/local/bin/gobuster && \
+    chmod +x /usr/local/bin/gobuster
+
+USER scanner
+
+ENTRYPOINT ["gobuster"]
+
+# Combined tools image (not recommended for production)
+FROM alpine:3.19 as all-tools
+
+RUN apk add --no-cache \
+    ruby \
+    perl \
+    python3 \
+    py3-pip \
+    nmap \
+    curl \
+    git \
+    ca-certificates && \
+    adduser -D -s /bin/ash scanner
+
+# Copy all tools
+COPY --from=whatweb --chown=scanner:scanner /opt/whatweb /opt/whatweb
+COPY --from=nikto --chown=scanner:scanner /opt/nikto /opt/nikto
+COPY --from=sqlmap --chown=scanner:scanner /opt/sqlmap /opt/sqlmap
+
+# Create symlinks
+RUN ln -s /opt/whatweb/whatweb /usr/local/bin/whatweb && \
+    ln -s /opt/nikto/program/nikto.pl /usr/local/bin/nikto && \
+    ln -s /opt/sqlmap/sqlmap.py /usr/local/bin/sqlmap
+
+USER scanner
+WORKDIR /home/scanner
+
+CMD ["/bin/ash"]
