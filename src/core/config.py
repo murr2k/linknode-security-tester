@@ -12,9 +12,9 @@ class ZAPConfig(BaseModel):
     """OWASP ZAP configuration."""
     api_key: str = Field(default="changeme", description="ZAP API key")
     host: str = Field(default="localhost", description="ZAP daemon host")
-    port: int = Field(default=8080, description="ZAP daemon port")
+    port: int = Field(default=8090, description="ZAP daemon port")
     proxy_host: str = Field(default="localhost", description="ZAP proxy host")
-    proxy_port: int = Field(default=8080, description="ZAP proxy port")
+    proxy_port: int = Field(default=8090, description="ZAP proxy port")
     
     @property
     def base_url(self) -> str:

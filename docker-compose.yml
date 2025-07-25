@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   zap:
-    image: owasp/zap2docker-stable:latest
+    image: ghcr.io/zaproxy/zaproxy:stable
     container_name: linknode-zap
     user: zap
     ports:
