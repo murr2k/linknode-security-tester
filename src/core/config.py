@@ -1,7 +1,7 @@
 """Configuration management for Linknode Security Tester."""
 
 import os
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pathlib import Path
 import yaml
 from pydantic import BaseModel, Field, validator
@@ -31,7 +31,7 @@ class ScanningConfig(BaseModel):
         default="Linknode Security Tester/1.0",
         description="User agent string"
     )
-    exclude_urls: list[str] = Field(
+    exclude_urls: List[str] = Field(
         default_factory=list,
         description="URL patterns to exclude"
     )
@@ -67,7 +67,7 @@ class ReportingConfig(BaseModel):
         default="medium",
         description="Minimum risk level to include in reports"
     )
-    output_formats: list[str] = Field(
+    output_formats: List[str] = Field(
         default=["html", "json"],
         description="Report output formats"
     )
