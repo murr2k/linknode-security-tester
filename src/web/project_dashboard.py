@@ -379,6 +379,19 @@ def run_scan_task(job_id: str, project_id: str, scan_config: Dict[str, Any]):
         def update_scan_progress():
             start_time = time.time()
             phase_start = time.time()
+            current_phase = "initialization"
+            
+            # Import here to avoid circular imports
+            from ..integrations.zap_client import ZAPClient
+            
+            # Create ZAP client once, not every loop
+            try:
+                zap_monitor = ZAPClient()
+                zap = zap_monitor.zap
+                print(f"Progress monitor connected to ZAP")
+            except Exception as e:
+                print(f"Failed to connect to ZAP for progress monitoring: {e}")
+                return
             
             while job_id in active_scans and active_scans[job_id]["status"] == "running":
                 elapsed = int(time.time() - start_time)
@@ -387,39 +400,108 @@ def run_scan_task(job_id: str, project_id: str, scan_config: Dict[str, Any]):
                 # Update elapsed time
                 active_scans[job_id]["phase_details"]["elapsed_time"] = elapsed
                 active_scans[job_id]["phase_details"]["phase_elapsed"] = phase_elapsed
+                    
                 
-                # Check ZAP for actual progress
                 try:
-                    if project_scanner.current_scanner and hasattr(project_scanner.current_scanner, 'zap_client'):
-                        zap = project_scanner.current_scanner.zap_client.zap
-                        
-                        # Get spider progress
-                        spider_status = zap.spider.status()
-                        if spider_status and int(spider_status) < 100:
-                            active_scans[job_id]["current_stage"] = "Spider scan"
-                            active_scans[job_id]["phase_details"]["current_phase"] = "Spider Scan"
-                            active_scans[job_id]["phase_details"]["phase_progress"] = int(spider_status)
-                            active_scans[job_id]["phase_details"]["activity"] = f"Crawling website... {spider_status}%"
-                            active_scans[job_id]["progress"] = 10 + (int(spider_status) * 0.1)
-                        
-                        # Get AJAX spider progress
-                        ajax_status = zap.ajaxSpider.status()
-                        if ajax_status and ajax_status != "stopped":
-                            active_scans[job_id]["current_stage"] = "AJAX spider scan"
-                            active_scans[job_id]["phase_details"]["current_phase"] = "AJAX Spider Scan"
-                            active_scans[job_id]["phase_details"]["activity"] = "Analyzing JavaScript and dynamic content..."
-                            active_scans[job_id]["progress"] = 20
-                        
-                        # Get URL count
+                    # Always get URL and alert counts
+                    try:
                         urls_in_scope = len(zap.core.urls())
                         active_scans[job_id]["phase_details"]["urls_found"] = urls_in_scope
-                        
-                        # Get alert count
+                    except Exception as e:
+                        print(f"Error getting URL count: {e}")
+                    
+                    try:
                         alerts = zap.core.alerts()
                         active_scans[job_id]["phase_details"]["vulnerabilities_found"] = len(alerts)
+                    except Exception as e:
+                        print(f"Error getting alert count: {e}")
                     
+                    # Determine current phase based on time and scan type
+                    if elapsed < 10:
+                        # First 10 seconds - Spider phase
+                        active_scans[job_id]["current_stage"] = "Spider scan"
+                        active_scans[job_id]["phase_details"]["current_phase"] = "Spider Scan"
+                        active_scans[job_id]["phase_details"]["activity"] = "Crawling website structure..."
+                        active_scans[job_id]["progress"] = min(15, 5 + elapsed)
+                        
+                        # Try to get actual spider progress
+                        try:
+                            spider_status = zap.spider.status()
+                            if spider_status:
+                                progress = int(spider_status)
+                                active_scans[job_id]["phase_details"]["phase_progress"] = progress
+                                active_scans[job_id]["phase_details"]["activity"] = f"Crawling website... {progress}%"
+                        except Exception as e:
+                            print(f"Spider status error: {e}")
+                            
+                    elif elapsed < 40 and scan_type == "full":
+                        # 10-40 seconds for full scan - AJAX Spider
+                        active_scans[job_id]["current_stage"] = "AJAX spider scan"
+                        active_scans[job_id]["phase_details"]["current_phase"] = "AJAX Spider Scan"
+                        active_scans[job_id]["phase_details"]["activity"] = "Analyzing JavaScript and dynamic content..."
+                        active_scans[job_id]["progress"] = min(25, 15 + (elapsed - 10) // 3)
+                        
+                        # Check if AJAX spider is actually running
+                        try:
+                            ajax_status = zap.ajaxSpider.status()
+                            if ajax_status == "running":
+                                active_scans[job_id]["phase_details"]["activity"] = "Executing JavaScript code..."
+                        except Exception as e:
+                            print(f"AJAX spider status error: {e}")
+                            
+                    elif elapsed < 50:
+                        # 40-50 seconds - Passive scan
+                        active_scans[job_id]["current_stage"] = "Passive scan"
+                        active_scans[job_id]["phase_details"]["current_phase"] = "Passive Scan"
+                        active_scans[job_id]["progress"] = min(35, 25 + (elapsed - 40))
+                        
+                        # Check passive scan queue
+                        try:
+                            records = int(zap.pscan.records_to_scan)
+                            active_scans[job_id]["phase_details"]["activity"] = f"Analyzing responses... {records} records left"
+                        except:
+                            active_scans[job_id]["phase_details"]["activity"] = "Analyzing HTTP responses..."
+                            
+                    else:
+                        # After 50 seconds - Active scan
+                        active_scans[job_id]["current_stage"] = "Active scan"
+                        active_scans[job_id]["phase_details"]["current_phase"] = "Active Scan"
+                        
+                        # Check for actual active scan progress
+                        try:
+                            # Get all scan IDs
+                            scans = json.loads(zap.ascan.scans())
+                            if scans and len(scans) > 0:
+                                # Get the latest scan
+                                latest_scan = scans[-1]
+                                scan_id = latest_scan.get('id')
+                                progress = int(latest_scan.get('progress', 0))
+                                
+                                active_scans[job_id]["phase_details"]["phase_progress"] = progress
+                                active_scans[job_id]["phase_details"]["activity"] = f"Testing for vulnerabilities... {progress}%"
+                                # Progress from 35 to 95 based on active scan progress
+                                active_scans[job_id]["progress"] = 35 + int(progress * 0.6)
+                            else:
+                                # No active scan yet, still in prep
+                                active_scans[job_id]["phase_details"]["activity"] = "Preparing vulnerability tests..."
+                                active_scans[job_id]["progress"] = 35
+                        except Exception as e:
+                            print(f"Active scan status error: {e}")
+                            active_scans[job_id]["phase_details"]["activity"] = "Running security tests..."
+                            # Gradual progress even if we can't get actual status
+                            active_scans[job_id]["progress"] = min(90, 35 + (elapsed - 50) // 2)
+                    
+                    # Update current phase if it changed
+                    new_phase = active_scans[job_id]["phase_details"]["current_phase"]
+                    if new_phase != current_phase:
+                        current_phase = new_phase
+                        phase_start = time.time()
+                        print(f"Scan phase changed to: {current_phase}")
+                        
                 except Exception as e:
                     print(f"Progress update error: {e}")
+                    import traceback
+                    traceback.print_exc()
                 
                 time.sleep(2)  # Update every 2 seconds
         
