@@ -390,30 +390,33 @@ def run_scan_task(job_id: str, project_id: str, scan_config: Dict[str, Any]):
                 
                 # Check ZAP for actual progress
                 try:
-                    # Get spider progress
-                    spider_status = project_scanner.scanner.zap_client.zap.spider.status()
-                    if spider_status and int(spider_status) < 100:
-                        active_scans[job_id]["current_stage"] = "Spider scan"
-                        active_scans[job_id]["phase_details"]["current_phase"] = "Spider Scan"
-                        active_scans[job_id]["phase_details"]["phase_progress"] = int(spider_status)
-                        active_scans[job_id]["phase_details"]["activity"] = f"Crawling website... {spider_status}%"
-                        active_scans[job_id]["progress"] = 10 + (int(spider_status) * 0.1)
-                    
-                    # Get AJAX spider progress
-                    ajax_status = project_scanner.scanner.zap_client.zap.ajaxSpider.status()
-                    if ajax_status and ajax_status != "stopped":
-                        active_scans[job_id]["current_stage"] = "AJAX spider scan"
-                        active_scans[job_id]["phase_details"]["current_phase"] = "AJAX Spider Scan"
-                        active_scans[job_id]["phase_details"]["activity"] = "Analyzing JavaScript and dynamic content..."
-                        active_scans[job_id]["progress"] = 20
-                    
-                    # Get URL count
-                    urls_in_scope = len(project_scanner.scanner.zap_client.zap.core.urls())
-                    active_scans[job_id]["phase_details"]["urls_found"] = urls_in_scope
-                    
-                    # Get alert count
-                    alerts = project_scanner.scanner.zap_client.zap.core.alerts()
-                    active_scans[job_id]["phase_details"]["vulnerabilities_found"] = len(alerts)
+                    if project_scanner.current_scanner and hasattr(project_scanner.current_scanner, 'zap_client'):
+                        zap = project_scanner.current_scanner.zap_client.zap
+                        
+                        # Get spider progress
+                        spider_status = zap.spider.status()
+                        if spider_status and int(spider_status) < 100:
+                            active_scans[job_id]["current_stage"] = "Spider scan"
+                            active_scans[job_id]["phase_details"]["current_phase"] = "Spider Scan"
+                            active_scans[job_id]["phase_details"]["phase_progress"] = int(spider_status)
+                            active_scans[job_id]["phase_details"]["activity"] = f"Crawling website... {spider_status}%"
+                            active_scans[job_id]["progress"] = 10 + (int(spider_status) * 0.1)
+                        
+                        # Get AJAX spider progress
+                        ajax_status = zap.ajaxSpider.status()
+                        if ajax_status and ajax_status != "stopped":
+                            active_scans[job_id]["current_stage"] = "AJAX spider scan"
+                            active_scans[job_id]["phase_details"]["current_phase"] = "AJAX Spider Scan"
+                            active_scans[job_id]["phase_details"]["activity"] = "Analyzing JavaScript and dynamic content..."
+                            active_scans[job_id]["progress"] = 20
+                        
+                        # Get URL count
+                        urls_in_scope = len(zap.core.urls())
+                        active_scans[job_id]["phase_details"]["urls_found"] = urls_in_scope
+                        
+                        # Get alert count
+                        alerts = zap.core.alerts()
+                        active_scans[job_id]["phase_details"]["vulnerabilities_found"] = len(alerts)
                     
                 except Exception as e:
                     print(f"Progress update error: {e}")

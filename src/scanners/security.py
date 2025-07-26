@@ -56,8 +56,11 @@ class SecurityScanner:
             # Phase 2: AJAX spider (for JavaScript-heavy sites)
             if config['ajax_spider']:
                 logger.info("Phase 2: Running AJAX spider scan")
-                ajax_results = self.zap.ajax_spider_scan(target_url)
+                # Use shorter timeout for AJAX spider to prevent hanging
+                ajax_results = self.zap.ajax_spider_scan(target_url, max_duration=30)
                 results['phases']['ajax_spider'] = ajax_results
+                if ajax_results.get('timed_out'):
+                    logger.warning("AJAX spider timed out, continuing with scan...")
             
             # Phase 3: Passive scan
             if config['passive_scan']:

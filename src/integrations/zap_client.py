@@ -65,26 +65,45 @@ class ZAPClient:
             'urls': urls
         }
     
-    def ajax_spider_scan(self, target_url: str) -> Dict[str, Any]:
-        """Run AJAX spider scan for JavaScript-heavy sites."""
-        logger.info(f"Starting AJAX spider scan for {target_url}")
+    def ajax_spider_scan(self, target_url: str, max_duration: int = 60) -> Dict[str, Any]:
+        """Run AJAX spider scan for JavaScript-heavy sites with timeout.
+        
+        Args:
+            target_url: URL to scan
+            max_duration: Maximum duration in seconds (default: 60)
+        """
+        logger.info(f"Starting AJAX spider scan for {target_url} (max {max_duration}s)")
         
         # Start AJAX spider
         self.zap.ajaxSpider.scan(target_url)
         
-        # Wait for AJAX spider to complete
+        # Wait for AJAX spider to complete with timeout
+        start_time = time.time()
         while self.zap.ajaxSpider.status == 'running':
-            logger.debug("AJAX spider still running...")
+            elapsed = time.time() - start_time
+            if elapsed > max_duration:
+                logger.warning(f"AJAX spider scan timed out after {elapsed:.1f} seconds, stopping...")
+                self.zap.ajaxSpider.stop()
+                time.sleep(2)  # Give it time to stop
+                break
+            logger.debug(f"AJAX spider still running... ({elapsed:.1f}s)")
             time.sleep(5)
         
         # Get results
-        results = self.zap.ajaxSpider.results(start=0, count=10000)
-        logger.info(f"AJAX spider completed, found {len(results)} results")
+        try:
+            results = self.zap.ajaxSpider.results(start=0, count=10000)
+        except Exception as e:
+            logger.warning(f"Failed to get AJAX spider results: {e}")
+            results = []
+            
+        status = self.zap.ajaxSpider.status
+        logger.info(f"AJAX spider {status}, found {len(results)} results")
         
         return {
-            'status': self.zap.ajaxSpider.status,
+            'status': status,
             'results_count': len(results),
-            'results': results
+            'results': results,
+            'timed_out': status == 'stopped' and (time.time() - start_time) > max_duration
         }
     
     def passive_scan(self, target_url: str) -> Dict[str, Any]:

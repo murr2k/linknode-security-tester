@@ -31,6 +31,7 @@ class ProjectScanner:
         self.active_project: Optional[Project] = None
         self.project_dir: Optional[Path] = None
         self.temp_dir: Optional[Path] = None
+        self.current_scanner: Optional[Any] = None
         
     def set_project(self, project_id: str) -> bool:
         """Set active project for scanning.
@@ -150,6 +151,7 @@ class ProjectScanner:
             else:
                 # Standard security scan
                 scanner = SecurityScanner()
+                self.current_scanner = scanner  # Store for progress updates
                 
                 # Configure scanner with project settings
                 if hasattr(scanner, 'zap_client'):
