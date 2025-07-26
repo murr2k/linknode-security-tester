@@ -81,7 +81,7 @@ class TestProjectScanner:
         
         # Mock scanner
         mock_scanner = Mock()
-        mock_scanner.quick_scan.return_value = {
+        mock_scanner.scan.return_value = {
             "alerts": [
                 {"name": "Test Alert", "risk": "High"}
             ],
@@ -95,7 +95,12 @@ class TestProjectScanner:
         # Verify
         assert "project" in results
         assert results["project"]["id"] == test_project.id
-        mock_scanner.quick_scan.assert_called_once_with(test_project.target_url)
+        mock_scanner.scan.assert_called_once_with(test_project.target_url, {
+            'spider': True,
+            'ajax_spider': False,
+            'passive_scan': True,
+            'active_scan': False
+        })
         
         # Check scan was saved
         scans = project_scanner.project_manager.get_project_scans(test_project.id)

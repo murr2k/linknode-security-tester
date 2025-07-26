@@ -402,8 +402,36 @@ def run_scan_task(job_id: str, project_id: str, scan_config: Dict[str, Any]):
                 active_scans[job_id]["progress"] = progress
                 active_scans[job_id]["current_stage"] = stage
         
-        # Run the actual scan
-        results = project_scanner.scan(scan_type=scan_type)
+        # Run the actual scan with timeout
+        import signal
+        from contextlib import contextmanager
+        
+        @contextmanager
+        def timeout(seconds):
+            def signal_handler(signum, frame):
+                raise TimeoutError("Scan timed out")
+            
+            # Set the signal handler and alarm
+            signal.signal(signal.SIGALRM, signal_handler)
+            signal.alarm(seconds)
+            try:
+                yield
+            finally:
+                signal.alarm(0)
+        
+        try:
+            # Set timeout based on scan type
+            scan_timeout = {
+                "quick": 300,      # 5 minutes
+                "full": 1800,      # 30 minutes
+                "technology": 600,  # 10 minutes
+                "compliance": 900   # 15 minutes
+            }.get(scan_type, 600)
+            
+            with timeout(scan_timeout):
+                results = project_scanner.scan(scan_type=scan_type)
+        except TimeoutError:
+            raise Exception(f"Scan timed out after {scan_timeout} seconds")
         
         # Update scan status
         active_scans[job_id]["status"] = "completed"
