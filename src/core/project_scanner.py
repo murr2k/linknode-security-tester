@@ -157,13 +157,32 @@ class ProjectScanner:
                 
                 # Run appropriate scan type
                 if scan_type == "quick":
-                    results = scanner.quick_scan(self.active_project.target_url)
-                elif scan_type == "passive":
-                    results = scanner.passive_scan(self.active_project.target_url)
-                elif scan_type == "active":
-                    results = scanner.active_scan(self.active_project.target_url)
-                else:  # full
-                    results = scanner.full_scan(self.active_project.target_url)
+                    # Quick scan - basic security checks
+                    results = scanner.scan(self.active_project.target_url, {
+                        'spider': True,
+                        'ajax_spider': False,
+                        'passive_scan': True,
+                        'active_scan': False
+                    })
+                elif scan_type == "full":
+                    # Full scan - comprehensive security assessment
+                    results = scanner.scan(self.active_project.target_url, {
+                        'spider': True,
+                        'ajax_spider': True,
+                        'passive_scan': True,
+                        'active_scan': True
+                    })
+                elif scan_type == "compliance":
+                    # Compliance scan - OWASP Top 10 focused
+                    results = scanner.scan(self.active_project.target_url, {
+                        'spider': True,
+                        'ajax_spider': True,
+                        'passive_scan': True,
+                        'active_scan': True,
+                        'compliance_mode': True
+                    })
+                else:  # Default to quick scan
+                    results = scanner.scan(self.active_project.target_url)
             
             # Add project metadata to results
             results["project"] = {
