@@ -47,7 +47,7 @@ jobs:
           type=raw,value=latest,enable={{is_default_branch}}
 
     - name: Build Docker image
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: .
         file: ./Dockerfile.secure
@@ -101,7 +101,7 @@ jobs:
         echo "- Results uploaded to GitHub Security tab" >> $GITHUB_STEP_SUMMARY
 
     - name: Push image if checks pass
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       if: github.event_name != 'pull_request'
       with:
         context: .
