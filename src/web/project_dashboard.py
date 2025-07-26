@@ -1,15 +1,20 @@
 """Web dashboard for project management and reporting."""
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import json
+import asyncio
+import uuid
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
 
 from ..core.project_manager import ProjectManager
+from ..core.project_scanner import ProjectScanner
+from ..core.report_generator import ReportGenerator
 
 app = FastAPI(title="Security Project Dashboard")
 
@@ -23,8 +28,15 @@ static_dir = Path(__file__).parent / "static"
 static_dir.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-# Initialize project manager
+# Initialize project manager and scanner
 project_manager = ProjectManager()
+project_scanner = ProjectScanner(project_manager)
+
+# Background task executor
+executor = ThreadPoolExecutor(max_workers=4)
+
+# Active scans tracking
+active_scans = {}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -50,10 +62,14 @@ async def dashboard(request: Request):
                 "risk_score": scans[0].risk_score
             })
     
-    return templates.TemplateResponse("dashboard.html", {
+    # Get unique clients for filter
+    clients = list(set(p.client_name for p in projects))
+    
+    return templates.TemplateResponse("enhanced_dashboard.html", {
         "request": request,
         "projects": projects,
-        "stats": stats
+        "stats": stats,
+        "clients": clients
     })
 
 
@@ -181,317 +197,204 @@ async def project_detail(request: Request, project_id: str):
     })
 
 
-# Create basic HTML templates
-dashboard_template = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Security Project Dashboard</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            margin: 0;
-            padding: 0;
-            background: #f5f5f5;
+@app.post("/api/projects")
+async def create_project(project_data: Dict[str, Any]):
+    """Create a new project."""
+    try:
+        project = project_manager.create_project(
+            name=project_data["name"],
+            client_name=project_data["client_name"],
+            target_url=project_data["target_url"],
+            description=project_data.get("description", ""),
+            tags=project_data.get("tags", [])
+        )
+        return {
+            "id": project.id,
+            "name": project.name,
+            "status": "created"
         }
-        .header {
-            background: #2c3e50;
-            color: white;
-            padding: 20px;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        .stat-card {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .stat-value {
-            font-size: 2em;
-            font-weight: bold;
-            color: #2c3e50;
-        }
-        .stat-label {
-            color: #7f8c8d;
-            margin-top: 5px;
-        }
-        .projects-table {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th {
-            background: #ecf0f1;
-            padding: 12px;
-            text-align: left;
-            font-weight: 600;
-        }
-        td {
-            padding: 12px;
-            border-top: 1px solid #ecf0f1;
-        }
-        .status {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.85em;
-        }
-        .status-active {
-            background: #d4edda;
-            color: #155724;
-        }
-        .status-completed {
-            background: #cce5ff;
-            color: #004085;
-        }
-        .status-archived {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        .risk-score {
-            font-weight: bold;
-        }
-        .risk-high { color: #e74c3c; }
-        .risk-medium { color: #f39c12; }
-        .risk-low { color: #27ae60; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>Security Project Dashboard</h1>
-    </div>
-    
-    <div class="container">
-        <div class="stats">
-            <div class="stat-card">
-                <div class="stat-value">{{ stats.total_projects }}</div>
-                <div class="stat-label">Total Projects</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{{ stats.active_projects }}</div>
-                <div class="stat-label">Active Projects</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{{ stats.total_clients }}</div>
-                <div class="stat-label">Total Clients</div>
-            </div>
-        </div>
-        
-        <div class="projects-table">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Project</th>
-                        <th>Client</th>
-                        <th>Target</th>
-                        <th>Status</th>
-                        <th>Last Updated</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for project in projects %}
-                    <tr>
-                        <td><strong>{{ project.name }}</strong></td>
-                        <td>{{ project.client_name }}</td>
-                        <td>{{ project.target_url }}</td>
-                        <td>
-                            <span class="status status-{{ project.status }}">
-                                {{ project.status }}
-                            </span>
-                        </td>
-                        <td>{{ project.updated_at }}</td>
-                        <td>
-                            <a href="/project/{{ project.id }}">View Details</a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-    
-    <script>
-        // Auto-refresh every 30 seconds
-        setTimeout(() => location.reload(), 30000);
-    </script>
-</body>
-</html>
-"""
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-project_detail_template = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>{{ project.name }} - Project Details</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            margin: 0;
-            padding: 0;
-            background: #f5f5f5;
-        }
-        .header {
-            background: #2c3e50;
-            color: white;
-            padding: 20px;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .project-info {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-        .scan-history {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .info-row {
-            display: flex;
-            margin-bottom: 10px;
-        }
-        .info-label {
-            font-weight: bold;
-            width: 150px;
-            color: #7f8c8d;
-        }
-        .vulnerability-counts {
-            display: flex;
-            gap: 15px;
-        }
-        .vuln-count {
-            padding: 5px 10px;
-            border-radius: 4px;
-            font-weight: bold;
-        }
-        .vuln-high {
-            background: #fee;
-            color: #c00;
-        }
-        .vuln-medium {
-            background: #ffeaa7;
-            color: #d63031;
-        }
-        .vuln-low {
-            background: #dfe6e9;
-            color: #2d3436;
-        }
-        #timeline-chart {
-            height: 300px;
-            margin-top: 20px;
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>{{ project.name }}</h1>
-        <a href="/" style="color: white;">← Back to Dashboard</a>
-    </div>
-    
-    <div class="container">
-        <div class="project-info">
-            <h2>Project Information</h2>
-            <div class="info-row">
-                <div class="info-label">Client:</div>
-                <div>{{ project.client_name }}</div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">Target URL:</div>
-                <div>{{ project.target_url }}</div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">Status:</div>
-                <div>{{ project.status }}</div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">Created:</div>
-                <div>{{ project.created_at }}</div>
-            </div>
-            {% if project.description %}
-            <div class="info-row">
-                <div class="info-label">Description:</div>
-                <div>{{ project.description }}</div>
-            </div>
-            {% endif %}
-        </div>
-        
-        <div class="scan-history">
-            <h2>Scan History</h2>
-            <table style="width: 100%;">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Type</th>
-                        <th>Duration</th>
-                        <th>Risk Score</th>
-                        <th>Vulnerabilities</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for scan in scans %}
-                    <tr>
-                        <td>{{ scan.scan_date }}</td>
-                        <td>{{ scan.scan_type }}</td>
-                        <td>{{ scan.duration }}s</td>
-                        <td>{{ scan.risk_score }}/100</td>
-                        <td>
-                            <div class="vulnerability-counts">
-                                <span class="vuln-count vuln-high">
-                                    H: {{ scan.vulnerability_count.get('High', 0) }}
-                                </span>
-                                <span class="vuln-count vuln-medium">
-                                    M: {{ scan.vulnerability_count.get('Medium', 0) }}
-                                </span>
-                                <span class="vuln-count vuln-low">
-                                    L: {{ scan.vulnerability_count.get('Low', 0) }}
-                                </span>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            
-            <div id="timeline-chart"></div>
-        </div>
-    </div>
-    
-    <script>
-        // Fetch and display timeline chart
-        fetch(`/api/project/{{ project.id }}/timeline`)
-            .then(response => response.json())
-            .then(data => {
-                // Chart rendering would go here
-                console.log('Timeline data:', data);
-            });
-    </script>
-</body>
-</html>
-"""
 
-# Save templates
-(templates_dir / "dashboard.html").write_text(dashboard_template)
-(templates_dir / "project_detail.html").write_text(project_detail_template)
+@app.post("/api/project/{project_id}/scan")
+async def start_scan(project_id: str, scan_config: Dict[str, Any], background_tasks: BackgroundTasks):
+    """Start a security scan for a project."""
+    project = project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Generate job ID
+    job_id = str(uuid.uuid4())
+    
+    # Track active scan
+    active_scans[job_id] = {
+        "project_id": project_id,
+        "project_name": project.name,
+        "scan_type": scan_config.get("scan_type", "quick"),
+        "status": "running",
+        "started_at": datetime.now().isoformat(),
+        "progress": 0
+    }
+    
+    # Run scan in background
+    background_tasks.add_task(run_scan_task, job_id, project_id, scan_config)
+    
+    return {
+        "job_id": job_id,
+        "status": "started",
+        "message": f"Scan started for project {project.name}"
+    }
+
+
+@app.get("/api/scans/active")
+async def get_active_scans():
+    """Get list of currently running scans."""
+    return list(active_scans.values())
+
+
+@app.get("/api/scan/{job_id}/status")
+async def get_scan_status(job_id: str):
+    """Get status of a specific scan job."""
+    if job_id not in active_scans:
+        raise HTTPException(status_code=404, detail="Scan job not found")
+    return active_scans[job_id]
+
+
+@app.post("/api/project/{project_id}/report")
+async def generate_project_report(project_id: str, report_config: Dict[str, Any]):
+    """Generate a report for a project."""
+    project = project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    scans = project_manager.get_project_scans(project_id)
+    if not scans:
+        raise HTTPException(status_code=400, detail="No scans found for this project")
+    
+    # Generate report
+    try:
+        generator = ReportGenerator()
+        report_format = report_config.get("format", "pdf")
+        
+        # Prepare scan data
+        scan_data = []
+        for scan in scans[:5]:  # Last 5 scans
+            if scan.report_path and Path(scan.report_path).exists():
+                with open(scan.report_path, 'r') as f:
+                    scan_results = json.load(f)
+                    scan_data.append({
+                        "scan_type": scan.scan_type,
+                        "scan_date": scan.scan_date,
+                        "results": scan_results
+                    })
+        
+        if not scan_data:
+            raise HTTPException(status_code=400, detail="No scan data available")
+        
+        # Generate report
+        report_path = generator.generate(
+            scan_data=scan_data[0]["results"],  # Use latest scan
+            project_info={
+                "name": project.name,
+                "client": project.client_name,
+                "url": project.target_url,
+                "scan_date": scan_data[0]["scan_date"]
+            },
+            format=report_format
+        )
+        
+        if report_path and report_path.exists():
+            return FileResponse(
+                path=str(report_path),
+                media_type='application/pdf' if report_format == 'pdf' else 'text/html',
+                filename=f"security-report-{project_id}.{report_format}"
+            )
+        else:
+            raise HTTPException(status_code=500, detail="Failed to generate report")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/project/{project_id}")
+async def delete_project(project_id: str, permanent: bool = False):
+    """Delete or archive a project."""
+    result = project_manager.delete_project(project_id, permanent=permanent)
+    if not result:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    return {
+        "status": "deleted" if permanent else "archived",
+        "project_id": project_id
+    }
+
+
+# Background task for running scans
+def run_scan_task(job_id: str, project_id: str, scan_config: Dict[str, Any]):
+    """Run a scan in the background."""
+    try:
+        # Set active project
+        project_scanner.set_project(project_id)
+        
+        # Update progress
+        active_scans[job_id]["progress"] = 10
+        
+        # Run the scan
+        scan_type = scan_config.get("scan_type", "quick")
+        results = project_scanner.scan(scan_type=scan_type)
+        
+        # Update scan status
+        active_scans[job_id]["status"] = "completed"
+        active_scans[job_id]["progress"] = 100
+        active_scans[job_id]["completed_at"] = datetime.now().isoformat()
+        active_scans[job_id]["results"] = {
+            "risk_score": results.get("risk_score", 0),
+            "vulnerabilities": results.get("vulnerability_count", {})
+        }
+        
+        # Generate report if requested
+        if scan_config.get("generate_report", False):
+            try:
+                generator = ReportGenerator()
+                report_path = generator.generate(
+                    scan_data=results,
+                    project_info={
+                        "name": results["project"]["name"],
+                        "client": results["project"]["client_name"],
+                        "url": results["project"]["target_url"],
+                        "scan_date": datetime.now().isoformat()
+                    },
+                    format="pdf"
+                )
+                active_scans[job_id]["report_path"] = str(report_path)
+            except Exception as e:
+                print(f"Failed to generate report: {e}")
+        
+        # Remove from active scans after 5 minutes
+        asyncio.create_task(cleanup_scan_job(job_id))
+        
+    except Exception as e:
+        active_scans[job_id]["status"] = "failed"
+        active_scans[job_id]["error"] = str(e)
+        active_scans[job_id]["completed_at"] = datetime.now().isoformat()
+
+
+async def cleanup_scan_job(job_id: str):
+    """Remove completed scan job after delay."""
+    await asyncio.sleep(300)  # 5 minutes
+    if job_id in active_scans:
+        del active_scans[job_id]
+
+
+# App startup event
+@app.on_event("startup")
+async def startup_event():
+    """Initialize the application."""
+    print("Security Project Dashboard started")
+    print(f"Dashboard URL: http://localhost:8000")
+    
+# App shutdown event  
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown."""
+    executor.shutdown(wait=True)

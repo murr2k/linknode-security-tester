@@ -42,6 +42,27 @@ cli.add_command(client)
 
 
 @cli.command()
+@click.option('--host', default='0.0.0.0', help='Host to bind to')
+@click.option('--port', default=8000, help='Port to bind to')
+def dashboard(host: str, port: int):
+    """Launch the web dashboard."""
+    import uvicorn
+    from src.web.project_dashboard import app
+    
+    console.print(f"[bold green]Starting Security Project Dashboard...[/bold green]")
+    console.print(f"[bold cyan]Access the dashboard at: http://localhost:{port}[/bold cyan]")
+    console.print("[yellow]Press CTRL+C to stop the server[/yellow]\n")
+    
+    uvicorn.run(
+        app,
+        host=host,
+        port=port,
+        reload=False,
+        log_level="info"
+    )
+
+
+@cli.command()
 @click.argument('target_url')
 @click.option(
     '--scan-types',

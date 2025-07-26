@@ -1,0 +1,3 @@
+[console_scripts]
+linknode-security-tester = main:cli
+lst = main:cli
