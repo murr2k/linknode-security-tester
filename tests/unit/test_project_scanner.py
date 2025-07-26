@@ -72,8 +72,9 @@ class TestProjectScanner:
         result = project_scanner.set_project("non-existent-id")
         assert result is False
     
+    @patch('src.core.project_scanner.ZAPClient')
     @patch('src.core.project_scanner.SecurityScanner')
-    def test_scan_quick(self, mock_scanner_class, project_scanner, test_project):
+    def test_scan_quick(self, mock_scanner_class, mock_zap_client, project_scanner, test_project):
         """Test quick scan execution."""
         # Setup
         project_scanner.set_project(test_project.id)
