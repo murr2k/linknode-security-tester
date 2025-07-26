@@ -18,12 +18,10 @@ class ZAPClient:
     def __init__(self, api_key: Optional[str] = None):
         """Initialize ZAP client."""
         self.api_key = api_key or settings.zap.api_key
+        # Connect directly to ZAP API without proxy
         self.zap = ZAPv2(
             apikey=self.api_key,
-            proxies={
-                'http': f'http://{settings.zap.proxy_host}:{settings.zap.proxy_port}',
-                'https': f'http://{settings.zap.proxy_host}:{settings.zap.proxy_port}'
-            }
+            proxies={'http': settings.zap.base_url, 'https': settings.zap.base_url}
         )
         self._verify_connection()
     

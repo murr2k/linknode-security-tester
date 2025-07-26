@@ -642,6 +642,22 @@
             transition: width 0.3s;
         }
         
+        .progress-bar.animated .progress-fill {
+            background: linear-gradient(
+                90deg,
+                #2980b9 0%,
+                #3498db 50%,
+                #5dade2 100%
+            );
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { background-position: -100% 0; }
+            100% { background-position: 100% 0; }
+        }
+        
         .toast {
             position: fixed;
             bottom: 20px;
@@ -1055,6 +1071,13 @@
             return 'Just now';
         }
         
+        // Format seconds to MM:SS
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+        
         // Filter projects
         function filterProjects() {
             const searchTerm = document.getElementById('search-input').value.toLowerCase();
@@ -1282,10 +1305,35 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="progress-bar">
+                            <div class="progress-bar ${scan.status === 'running' ? 'animated' : ''}">
                                 <div class="progress-fill" style="width: ${scan.progress}%"></div>
                             </div>
                         `;
+                        
+                        // Add enhanced phase details
+                        if (scan.phase_details) {
+                            const details = scan.phase_details;
+                            const elapsed = details.elapsed_time ? formatTime(details.elapsed_time) : '0:00';
+                            
+                            detailsHTML += `
+                                <div style="margin-top: 12px; padding: 12px; background: #f7fafc; border-radius: 6px;">
+                                    <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                                        <span style="font-weight: 600; color: #2d3748; font-size: 13px;">
+                                            ${details.current_phase || 'Initializing'}
+                                        </span>
+                                        ${scan.status === 'running' ? '<span style="margin-left: 8px;">🔄</span>' : ''}
+                                    </div>
+                                    <div style="font-size: 12px; color: #4a5568; margin-bottom: 8px;">
+                                        ${details.activity || 'Starting scan...'}
+                                    </div>
+                                    <div style="display: flex; gap: 16px; font-size: 11px; color: #718096;">
+                                        <span>⏱️ ${elapsed}</span>
+                                        <span>🔗 ${details.urls_found || 0} URLs found</span>
+                                        <span>⚠️ ${details.vulnerabilities_found || 0} issues</span>
+                                    </div>
+                                </div>
+                            `;
+                        }
                         
                         // Show current step prominently
                         if (currentStep < scanSteps.length) {

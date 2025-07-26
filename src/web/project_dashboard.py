@@ -354,6 +354,8 @@ async def delete_project(project_id: str, permanent: bool = False):
 # Background task for running scans
 def run_scan_task(job_id: str, project_id: str, scan_config: Dict[str, Any]):
     """Run a scan in the background."""
+    import threading
+    
     try:
         # Set active project
         project_scanner.set_project(project_id)
@@ -361,66 +363,76 @@ def run_scan_task(job_id: str, project_id: str, scan_config: Dict[str, Any]):
         # Update progress based on scan type
         scan_type = scan_config.get("scan_type", "quick")
         
-        # Simulate progress updates for different scan stages
-        if scan_type == "quick":
-            progress_stages = [
-                (10, "Initializing scanner"),
-                (20, "Target reconnaissance"), 
-                (40, "Port scanning"),
-                (60, "Service detection"),
-                (80, "Basic vulnerability scan"),
-                (90, "Generating report")
-            ]
-        elif scan_type == "full":
-            progress_stages = [
-                (5, "Initializing scanner"),
-                (10, "Target reconnaissance"),
-                (15, "DNS enumeration"),
-                (30, "Port scanning (all ports)"),
-                (40, "Service detection"),
-                (45, "OS fingerprinting"),
-                (60, "Vulnerability scanning"),
-                (70, "Web application scan"),
-                (80, "SSL/TLS analysis"),
-                (85, "Security headers check"),
-                (95, "Generating comprehensive report")
-            ]
-        elif scan_type == "technology":
-            progress_stages = [
-                (10, "Initializing scanner"),
-                (20, "Technology detection"),
-                (35, "Framework identification"),
-                (50, "Version fingerprinting"),
-                (65, "Known CVE checking"),
-                (80, "Technology-specific tests"),
-                (90, "Dependency analysis"),
-                (95, "Generating report")
-            ]
-        else:  # compliance
-            progress_stages = [
-                (10, "Initializing scanner"),
-                (20, "OWASP Top 10 checks"),
-                (30, "Authentication testing"),
-                (40, "Authorization testing"),
-                (50, "Session management"),
-                (60, "Input validation"),
-                (75, "Security configuration"),
-                (85, "Compliance mapping"),
-                (95, "Generating compliance report")
-            ]
+        # Initialize scan data
+        active_scans[job_id]["progress"] = 5
+        active_scans[job_id]["current_stage"] = "Initializing scanner"
+        active_scans[job_id]["phase_details"] = {
+            "current_phase": "Initialization",
+            "phase_progress": 0,
+            "urls_found": 0,
+            "vulnerabilities_found": 0,
+            "elapsed_time": 0,
+            "activity": "Starting security scan..."
+        }
         
-        # Update progress for first stage
-        active_scans[job_id]["progress"] = progress_stages[0][0]
-        active_scans[job_id]["current_stage"] = progress_stages[0][1]
+        # Create a thread to update scan progress
+        def update_scan_progress():
+            start_time = time.time()
+            phase_start = time.time()
+            
+            while job_id in active_scans and active_scans[job_id]["status"] == "running":
+                elapsed = int(time.time() - start_time)
+                phase_elapsed = int(time.time() - phase_start)
+                
+                # Update elapsed time
+                active_scans[job_id]["phase_details"]["elapsed_time"] = elapsed
+                active_scans[job_id]["phase_details"]["phase_elapsed"] = phase_elapsed
+                
+                # Check ZAP for actual progress
+                try:
+                    # Get spider progress
+                    spider_status = project_scanner.scanner.zap_client.zap.spider.status()
+                    if spider_status and int(spider_status) < 100:
+                        active_scans[job_id]["current_stage"] = "Spider scan"
+                        active_scans[job_id]["phase_details"]["current_phase"] = "Spider Scan"
+                        active_scans[job_id]["phase_details"]["phase_progress"] = int(spider_status)
+                        active_scans[job_id]["phase_details"]["activity"] = f"Crawling website... {spider_status}%"
+                        active_scans[job_id]["progress"] = 10 + (int(spider_status) * 0.1)
+                    
+                    # Get AJAX spider progress
+                    ajax_status = project_scanner.scanner.zap_client.zap.ajaxSpider.status()
+                    if ajax_status and ajax_status != "stopped":
+                        active_scans[job_id]["current_stage"] = "AJAX spider scan"
+                        active_scans[job_id]["phase_details"]["current_phase"] = "AJAX Spider Scan"
+                        active_scans[job_id]["phase_details"]["activity"] = "Analyzing JavaScript and dynamic content..."
+                        active_scans[job_id]["progress"] = 20
+                    
+                    # Get URL count
+                    urls_in_scope = len(project_scanner.scanner.zap_client.zap.core.urls())
+                    active_scans[job_id]["phase_details"]["urls_found"] = urls_in_scope
+                    
+                    # Get alert count
+                    alerts = project_scanner.scanner.zap_client.zap.core.alerts()
+                    active_scans[job_id]["phase_details"]["vulnerabilities_found"] = len(alerts)
+                    
+                except Exception as e:
+                    print(f"Progress update error: {e}")
+                
+                time.sleep(2)  # Update every 2 seconds
+        
+        # Start progress updater in background
+        progress_thread = threading.Thread(target=update_scan_progress)
+        progress_thread.daemon = True
+        progress_thread.start()
         
         # Run the actual scan
-        # Note: We'll implement proper async timeout later
-        # For now, just run the scan without timeout since signal doesn't work in threads
         try:
             results = project_scanner.scan(scan_type=scan_type)
         except Exception as e:
             # Log the error but continue to update scan status
             print(f"Scan error: {e}")
+            import traceback
+            traceback.print_exc()
             raise
         
         # Update scan status
