@@ -40,7 +40,7 @@ WORKDIR /opt/whatweb
 ENTRYPOINT ["./whatweb"]
 
 # Nikto stage
-FROM perl:5.38-slim as nikto
+FROM perl:5.42-slim as nikto
 
 # Install dependencies
 RUN apt-get update && \
@@ -57,7 +57,7 @@ RUN git clone --depth 1 https://github.com/sullo/nikto.git /opt/nikto && \
     rm -rf .git .gitignore
 
 # Create minimal runtime
-FROM perl:5.38-slim as nikto-runtime
+FROM perl:5.42-slim as nikto-runtime
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
