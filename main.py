@@ -14,6 +14,8 @@ import json
 
 from src.core.orchestrator import ScanOrchestrator
 from src.core.config import settings
+from src.cli.project_commands import project
+from src.cli.client_commands import client
 
 # Setup rich console
 console = Console()
@@ -33,6 +35,10 @@ logger = logging.getLogger(__name__)
 def cli():
     """Linknode Security Tester - Comprehensive website quality and penetration testing tool."""
     pass
+
+# Add project and client commands to CLI
+cli.add_command(project)
+cli.add_command(client)
 
 
 @cli.command()
@@ -153,7 +159,7 @@ def serve(port: int, host: str):
     try:
         import uvicorn
         uvicorn.run(
-            "src.api.main:app",
+            "src.web.project_dashboard:app",
             host=host,
             port=port,
             reload=settings.debug
@@ -216,7 +222,7 @@ def stop_zap():
         console.print(f"[red]✗ Error:[/red] {str(e)}")
 
 
-def display_scan_summary(results: Dict):
+def display_scan_summary(results: dict):
     """Display scan results summary."""
     summary = results.get('summary', {})
     
@@ -245,7 +251,7 @@ def display_scan_summary(results: Dict):
             console.print(f"  • {rec}")
 
 
-def save_results(results: Dict, output_path: str, format: str):
+def save_results(results: dict, output_path: str, format: str):
     """Save scan results to file."""
     if format == 'json':
         with open(output_path, 'w') as f:

@@ -1,0 +1,156 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ project.name }} - Project Details</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f5f5f5;
+        }
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .project-info {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .scan-history {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .info-row {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        .info-label {
+            font-weight: bold;
+            width: 150px;
+            color: #7f8c8d;
+        }
+        .vulnerability-counts {
+            display: flex;
+            gap: 15px;
+        }
+        .vuln-count {
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .vuln-high {
+            background: #fee;
+            color: #c00;
+        }
+        .vuln-medium {
+            background: #ffeaa7;
+            color: #d63031;
+        }
+        .vuln-low {
+            background: #dfe6e9;
+            color: #2d3436;
+        }
+        #timeline-chart {
+            height: 300px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{{ project.name }}</h1>
+        <a href="/" style="color: white;">← Back to Dashboard</a>
+    </div>
+    
+    <div class="container">
+        <div class="project-info">
+            <h2>Project Information</h2>
+            <div class="info-row">
+                <div class="info-label">Client:</div>
+                <div>{{ project.client_name }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Target URL:</div>
+                <div>{{ project.target_url }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Status:</div>
+                <div>{{ project.status }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Created:</div>
+                <div>{{ project.created_at }}</div>
+            </div>
+            {% if project.description %}
+            <div class="info-row">
+                <div class="info-label">Description:</div>
+                <div>{{ project.description }}</div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="scan-history">
+            <h2>Scan History</h2>
+            <table style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Duration</th>
+                        <th>Risk Score</th>
+                        <th>Vulnerabilities</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for scan in scans %}
+                    <tr>
+                        <td>{{ scan.scan_date }}</td>
+                        <td>{{ scan.scan_type }}</td>
+                        <td>{{ scan.duration }}s</td>
+                        <td>{{ scan.risk_score }}/100</td>
+                        <td>
+                            <div class="vulnerability-counts">
+                                <span class="vuln-count vuln-high">
+                                    H: {{ scan.vulnerability_count.get('High', 0) }}
+                                </span>
+                                <span class="vuln-count vuln-medium">
+                                    M: {{ scan.vulnerability_count.get('Medium', 0) }}
+                                </span>
+                                <span class="vuln-count vuln-low">
+                                    L: {{ scan.vulnerability_count.get('Low', 0) }}
+                                </span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            
+            <div id="timeline-chart"></div>
+        </div>
+    </div>
+    
+    <script>
+        // Fetch and display timeline chart
+        fetch(`/api/project/{{ project.id }}/timeline`)
+            .then(response => response.json())
+            .then(data => {
+                // Chart rendering would go here
+                console.log('Timeline data:', data);
+            });
+    </script>
+</body>
+</html>
