@@ -18,7 +18,7 @@ beautifulsoup4==4.12.2
 lxml==4.9.3
 
 # Performance analysis
-lighthouse-python==1.0.2
+# lighthouse-python==1.0.2  # Not available on PyPI - removed for now
 selenium==4.15.2
 webdriver-manager==4.0.1
 
