@@ -46,7 +46,7 @@ asyncio==3.4.3
 
 # Security analysis
 bandit==1.7.5
-safety==2.3.5  # Compatible with pydantic 2.x
+safety==3.6.0  # Compatible with pydantic 2.x
 
 # Phase 1 Tools Integration
 subprocess32==3.5.4  # Better subprocess handling for tool integration
