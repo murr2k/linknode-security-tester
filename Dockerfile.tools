@@ -91,7 +91,7 @@ USER scanner
 ENTRYPOINT ["nmap"]
 
 # SQLMap stage (optional, for SQL injection testing)
-FROM python:3.11-alpine as sqlmap
+FROM python:3.13-alpine as sqlmap
 
 RUN apk add --no-cache \
     git \
