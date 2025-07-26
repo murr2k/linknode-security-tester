@@ -1,6 +1,6 @@
 # Secure multi-stage Dockerfile for Linknode Security Tester
 # Stage 1: Build dependencies and tools
-FROM python:3.11-slim as builder
+FROM python:3.13-slim as builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -48,7 +48,7 @@ RUN git clone --depth 1 https://github.com/urbanadventurer/WhatWeb.git /opt/what
 RUN git clone --depth 1 https://github.com/sullo/nikto.git /opt/nikto
 
 # Stage 3: Final minimal runtime image
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 # Security: Create non-root user
 RUN groupadd -r scanner -g 1001 && \
