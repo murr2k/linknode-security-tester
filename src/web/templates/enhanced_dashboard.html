@@ -530,33 +530,86 @@
             100% { transform: rotate(360deg); }
         }
         
-        .scan-progress-item {
-            padding: 8px 12px;
-            margin: 4px 0;
-            background: #f7fafc;
-            border-radius: 6px;
-            font-size: 13px;
+        .scan-step-indicator {
             display: flex;
             align-items: center;
             gap: 8px;
-            border-left: 3px solid #e2e8f0;
+            margin: 4px 0;
+            font-size: 12px;
+            color: #718096;
+        }
+        
+        .scan-step-indicator.active {
+            color: #3498db;
+            font-weight: 500;
+        }
+        
+        .scan-step-indicator.completed {
+            color: #48bb78;
+        }
+        
+        .scan-step-indicator.error {
+            color: #e53e3e;
+        }
+        
+        .step-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            background: #f7fafc;
+            border: 2px solid #e2e8f0;
+            flex-shrink: 0;
+        }
+        
+        .step-icon.completed {
+            background: #48bb78;
+            border-color: #48bb78;
+            color: white;
+        }
+        
+        .step-icon.active {
+            background: #3498db;
+            border-color: #3498db;
+            color: white;
+        }
+        
+        .step-icon.error {
+            background: #e53e3e;
+            border-color: #e53e3e;
+            color: white;
+        }
+        
+        .scan-steps-compact {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+        
+        .step-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #e2e8f0;
             transition: all 0.3s;
         }
         
-        .scan-progress-item.active {
-            background: #e3f2fd;
-            border-left-color: #3498db;
+        .step-dot.completed {
+            background: #48bb78;
+        }
+        
+        .step-dot.active {
+            background: #3498db;
             animation: pulse 2s infinite;
         }
         
-        .scan-progress-item.completed {
-            background: #f0fdf4;
-            border-left-color: #48bb78;
-        }
-        
-        .scan-progress-item.error {
-            background: #fee;
-            border-left-color: #e53e3e;
+        .step-dot.error {
+            background: #e53e3e;
         }
         
         @keyframes pulse {
@@ -566,11 +619,7 @@
         }
         
         .scan-info {
-            background: #f7fafc;
-            padding: 8px 12px;
-            border-radius: 6px;
-            margin-bottom: 8px;
-            font-size: 12px;
+            margin-bottom: 12px;
         }
         
         .scan-info-label {
@@ -707,12 +756,14 @@
                 </div>
             </div>
             
-            <div class="stat-card" id="active-scans-card">
+            <div class="stat-card" id="active-scans-card" style="grid-column: span 2;">
                 <div class="stat-header">
                     <div style="flex: 1;">
-                        <div class="stat-value" id="active-scans">0</div>
-                        <div class="stat-label">Active Scans</div>
-                        <div id="scan-details" style="margin-top: 12px; max-height: 200px; overflow-y: auto;">
+                        <div style="display: flex; align-items: baseline; gap: 16px;">
+                            <div class="stat-value" id="active-scans">0</div>
+                            <div class="stat-label">Active Scans</div>
+                        </div>
+                        <div id="scan-details" style="margin-top: 16px;">
                             <div class="stat-trend" style="color: #718096;">
                                 <span id="scan-status">No scans running</span>
                             </div>
@@ -1216,49 +1267,61 @@
                         
                         detailsHTML += `
                             <div class="scan-info">
-                                <div><span class="scan-info-label">Project:</span> ${scan.project_name}</div>
-                                <div><span class="scan-info-label">Type:</span> ${scan.scan_type.toUpperCase()} scan</div>
-                                <div><span class="scan-info-label">Started:</span> ${getTimeAgo(new Date(scan.started_at))}</div>
+                                <div style="display: flex; justify-content: space-between; align-items: start;">
+                                    <div>
+                                        <div style="font-size: 14px; font-weight: 600; color: #2d3748; margin-bottom: 4px;">${scan.project_name}</div>
+                                        <div style="font-size: 12px; color: #718096;">
+                                            <span class="scan-info-label">Type:</span> ${scan.scan_type.toUpperCase()} • 
+                                            <span class="scan-info-label">Started:</span> ${getTimeAgo(new Date(scan.started_at))}
+                                        </div>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <div style="font-size: 20px; font-weight: 600; color: #3498db;">${scan.progress}%</div>
+                                    </div>
+                                </div>
                             </div>
                             <div class="progress-bar">
                                 <div class="progress-fill" style="width: ${scan.progress}%"></div>
                             </div>
-                            <div style="font-size: 11px; color: #718096; margin-bottom: 8px;">Progress: ${scan.progress}%</div>
                         `;
                         
-                        // Add scrolling todo list of steps
-                        detailsHTML += '<div style="max-height: 120px; overflow-y: auto;">';
-                        scanSteps.forEach((step, index) => {
-                            let className = 'scan-progress-item';
-                            let icon = '○';
-                            
-                            if (index < currentStep) {
-                                className += ' completed';
-                                icon = '✓';
-                            } else if (index === currentStep) {
-                                className += ' active';
-                                icon = '<span class="loading" style="width: 12px; height: 12px;"></span>';
-                            }
-                            
-                            if (scan.status === 'failed' && index === currentStep) {
-                                className = 'scan-progress-item error';
-                                icon = '✗';
-                            }
+                        // Show current step prominently
+                        if (currentStep < scanSteps.length) {
+                            const currentStepText = scanSteps[currentStep];
+                            const statusClass = scan.status === 'failed' ? 'error' : 'active';
+                            const icon = scan.status === 'failed' ? '✗' : '<span class="loading" style="width: 12px; height: 12px;"></span>';
                             
                             detailsHTML += `
-                                <div class="${className}">
-                                    <span>${icon}</span>
-                                    <span>${step}</span>
+                                <div class="scan-step-indicator ${statusClass}" style="margin-top: 12px; margin-bottom: 8px;">
+                                    <span class="step-icon ${statusClass}">${icon}</span>
+                                    <span>${currentStepText}</span>
                                 </div>
                             `;
+                        }
+                        
+                        // Show compact progress dots
+                        detailsHTML += '<div class="scan-steps-compact">';
+                        scanSteps.forEach((step, index) => {
+                            let dotClass = 'step-dot';
+                            let tooltip = step;
+                            
+                            if (index < currentStep) {
+                                dotClass += ' completed';
+                            } else if (index === currentStep) {
+                                dotClass += ' active';
+                                if (scan.status === 'failed') {
+                                    dotClass = 'step-dot error';
+                                }
+                            }
+                            
+                            detailsHTML += `<div class="${dotClass}" title="${tooltip}"></div>`;
                         });
                         detailsHTML += '</div>';
                         
                         if (scan.status === 'failed' && scan.error) {
                             detailsHTML += `
-                                <div class="scan-progress-item error" style="margin-top: 8px;">
-                                    <span>✗</span>
-                                    <span>Error: ${scan.error}</span>
+                                <div style="margin-top: 12px; padding: 8px 12px; background: #fee; border-radius: 6px; font-size: 12px; color: #c53030;">
+                                    <strong>Error:</strong> ${scan.error}
                                 </div>
                             `;
                         }
