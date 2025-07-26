@@ -8,7 +8,7 @@ pydantic-settings==2.1.0
 # HTTP and networking
 httpx==0.25.2
 requests==2.31.0
-urllib3==2.1.0
+urllib3==2.5.0
 
 # Testing and quality
 pytest==7.4.3
