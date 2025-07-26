@@ -415,20 +415,40 @@ def run_scan_task(job_id: str, project_id: str, scan_config: Dict[str, Any]):
         # Generate report if requested
         if scan_config.get("generate_report", False):
             try:
-                generator = ReportGenerator()
-                report_path = generator.generate(
-                    scan_data=results,
-                    project_info={
-                        "name": results["project"]["name"],
-                        "client": results["project"]["client_name"],
-                        "url": results["project"]["target_url"],
-                        "scan_date": datetime.now().isoformat()
-                    },
-                    format="pdf"
+                # Prepare data for report generator
+                project_data = {
+                    "name": results["project"]["name"],
+                    "client_name": results["project"]["client"],
+                    "target_url": project_scanner.active_project.target_url,
+                    "id": project_id
+                }
+                
+                scan_data = {
+                    "scan_type": scan_type,
+                    "scan_date": datetime.now().isoformat(),
+                    "duration": results.get("scan_duration", 0)
+                }
+                
+                # Initialize report generator with required arguments
+                generator = ReportGenerator(
+                    project_data=project_data,
+                    scan_data=scan_data,
+                    scan_results=results
                 )
+                
+                # Generate report
+                output_dir = Path(f".linknode-security/projects/{project_id}/reports")
+                output_dir.mkdir(parents=True, exist_ok=True)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_path = output_dir / f"report_{scan_type}_{timestamp}"
+                
+                report_path = generator.generate(format="pdf", output_path=output_path)
                 active_scans[job_id]["report_path"] = str(report_path)
+                print(f"Report generated: {report_path}")
             except Exception as e:
                 print(f"Failed to generate report: {e}")
+                import traceback
+                traceback.print_exc()
         
         # Remove from active scans after 5 minutes
         # Note: Can't use asyncio in thread pool, schedule cleanup differently
