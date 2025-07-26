@@ -276,7 +276,6 @@ async def generate_project_report(project_id: str, report_config: Dict[str, Any]
     
     # Generate report
     try:
-        generator = ReportGenerator()
         report_format = report_config.get("format", "pdf")
         
         # Prepare scan data
@@ -294,17 +293,35 @@ async def generate_project_report(project_id: str, report_config: Dict[str, Any]
         if not scan_data:
             raise HTTPException(status_code=400, detail="No scan data available")
         
-        # Generate report
-        report_path = generator.generate(
-            scan_data=scan_data[0]["results"],  # Use latest scan
-            project_info={
-                "name": project.name,
-                "client": project.client_name,
-                "url": project.target_url,
-                "scan_date": scan_data[0]["scan_date"]
-            },
-            format=report_format
+        # Prepare data for new ReportGenerator
+        project_data = {
+            "id": project.id,
+            "name": project.name,
+            "client_name": project.client_name,
+            "target_url": project.target_url
+        }
+        
+        scan_meta = {
+            "scan_type": scans[0].scan_type,
+            "scan_date": scan_data[0]["scan_date"],
+            "duration": scans[0].duration
+        }
+        
+        # Initialize report generator with required arguments
+        generator = ReportGenerator(
+            project_data=project_data,
+            scan_data=scan_meta,
+            scan_results=scan_data[0]["results"]
         )
+        
+        # Generate report
+        home_dir = Path.home()
+        output_dir = home_dir / f".linknode-security/projects/{project_id}/reports"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = output_dir / f"report_{report_format}_{timestamp}"
+        
+        report_path = generator.generate(format=report_format, output_path=output_path)
         
         if report_path and report_path.exists():
             return FileResponse(
@@ -437,7 +454,8 @@ def run_scan_task(job_id: str, project_id: str, scan_config: Dict[str, Any]):
                 )
                 
                 # Generate report
-                output_dir = Path(f".linknode-security/projects/{project_id}/reports")
+                home_dir = Path.home()
+                output_dir = home_dir / f".linknode-security/projects/{project_id}/reports"
                 output_dir.mkdir(parents=True, exist_ok=True)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 output_path = output_dir / f"report_{scan_type}_{timestamp}"
