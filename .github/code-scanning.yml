@@ -1,21 +1,30 @@
 # Code Scanning Configuration
 
-# This file documents the recommended security configuration for this repository
-# Apply these settings in: Settings → Code security and analysis
+Navigate to: Settings → Code security and analysis → Code scanning → Protection rules
 
-## Alert Severity Thresholds
+## Check runs failure threshold
 
-### Check runs failure threshold: **High or higher**
-This means:
-- ❌ **Critical** severity alerts: Block merge
-- ❌ **High** severity alerts: Block merge  
-- ⚠️ **Medium** severity alerts: Show but don't block
-- ℹ️ **Low** severity alerts: Show but don't block
+### Recommended Setting: **High or higher**
 
-### Rationale
-- Critical/High vulnerabilities pose immediate security risks
-- Medium/Low vulnerabilities should be addressed but not block development
-- This balances security with development velocity
+Available options:
+- **None** - No alerts block merging
+- **Errors only** - Only errors block (not security alerts)  
+- **High or higher** ← **SELECT THIS**
+- **Medium or higher** - Too restrictive for most projects
+- **Low or higher** - Very restrictive
+- **All** - Includes informational notes (not recommended)
+
+### What "High or higher" means:
+- ❌ **Critical** severity: Blocks merge
+- ❌ **High** severity: Blocks merge  
+- ⚠️ **Medium** severity: Shows alert but doesn't block
+- ℹ️ **Low** severity: Shows alert but doesn't block
+- 📝 **Note/Info**: Shows but doesn't block
+
+### Why this setting?
+- Critical/High vulnerabilities are actual security risks
+- Medium/Low findings are often false positives or minor issues
+- Balances security with development speed
 
 ## Auto-dismiss Alerts
 

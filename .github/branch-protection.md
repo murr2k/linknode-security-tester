@@ -2,43 +2,75 @@
 
 This document outlines the recommended branch protection rules for the main branch.
 
-## How to Configure
+## Prerequisites
+**Important**: Status checks only appear after they've run at least once. The CodeQL workflow was just added, so it needs to run before it will appear in the status checks list.
+
+### Trigger the workflows first:
+```bash
+# Option 1: Make a small change and push
+echo "# trigger workflows" >> README.md
+git add README.md && git commit -m "Trigger workflows" && git push
+
+# Option 2: Manually trigger workflows in GitHub Actions tab
+# Go to Actions → Select workflow → Run workflow
+```
+
+## How to Configure Branch Protection
 
 1. Go to **Settings** (in your repository)
 2. Under **Code and automation**, click **Branches**
-3. Click **Add branch protection rule** (or **Add rule**)
+3. Click **Add branch protection rule**
 
 ### Branch name pattern
 Enter: `main`
 
-### Protection Settings
+## Recommended Settings
 
-#### ✅ Require a pull request before merging
-Check this box, then configure:
-- **Require approvals**: Set to 1 (or 0 for solo projects)
-- **Dismiss stale pull request approvals when new commits are pushed**: Check this
-- **Require review from CODEOWNERS**: Optional
+### ✅ Require a pull request before merging
+- Check this box
+- **Require approvals**: 
+  - For team projects: Check this and set to 1
+  - For solo projects: Leave unchecked (this still requires PR but no approvals)
+- **Dismiss stale pull request approvals when new commits are pushed**: ✓ Check (if using approvals)
+- **Require review from Code Owners**: Leave unchecked (unless you have CODEOWNERS file)
+- **Require approval of the most recent reviewable push**: Leave unchecked
 
-#### ✅ Require status checks to pass before merging
-Check this box, then:
-1. Check **Require branches to be up to date before merging**
-2. Search for and select these status checks:
-   - `Docker Security Build / build-and-scan`
-   - `test-project-management`
-   - `CodeQL / Analyze (python)`
+### ✅ Require status checks to pass before merging
+- Check this box
+- **Require branches to be up to date before merging**: ✓ Check
+- **Status checks**: Search and add:
+  - `build-and-scan` (from Docker Security Build workflow)
+  - `test-project-management` 
+  - `Analyze (python)` (from CodeQL workflow)
+  
+**Note**: If these don't appear, the workflows haven't run yet. Save the rule and come back after workflows run.
 
-Note: These checks will only appear after they've run at least once.
+### ✅ Require conversation resolution before merging
+- ✓ Check this box
 
-#### ✅ Require conversation resolution before merging
-Check this box
+### ⚠️ Optional Settings
+- **Require signed commits**: Optional (good for security)
+- **Require linear history**: Optional (prevents merge commits)
+- **Require deployments to succeed**: Leave unchecked
+- **Lock branch**: Leave unchecked
 
-#### ✅ Additional Settings (scroll down)
-- **Do not allow bypassing the above settings**: Check this
-- **Restrict who can push to matching branches**: Optional (adds extra security)
+### ✅ Do not allow bypassing the above settings
+- ✓ Check this (applies rules even to admins)
+
+### ❌ Rules applied to everyone including administrators
 - **Allow force pushes**: Leave unchecked
 - **Allow deletions**: Leave unchecked
 
-Click **Create** or **Save changes**
+Click **Create** to save the rule.
+
+## For Solo Developers
+
+If you're working alone and find the PR requirement cumbersome:
+1. Leave "Require approvals" unchecked (no approval needed)
+2. Use GitHub CLI for quick PR workflow: `gh pr create --fill && gh pr merge --auto`
+3. Or install GitHub Mobile app to merge PRs on the go
+
+This way you still get all CI/CD checks without blocking yourself on approvals.
 
 ### Code Scanning Alert Thresholds
 
