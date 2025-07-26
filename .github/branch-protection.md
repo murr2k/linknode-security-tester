@@ -4,31 +4,41 @@ This document outlines the recommended branch protection rules for the main bran
 
 ## How to Configure
 
-Go to Settings → Branches → Add rule
+1. Go to **Settings** (in your repository)
+2. Under **Code and automation**, click **Branches**
+3. Click **Add branch protection rule** (or **Add rule**)
 
 ### Branch name pattern
-- `main`
+Enter: `main`
 
-### Protection Rules
+### Protection Settings
 
 #### ✅ Require a pull request before merging
-- [x] Require approvals: 1
-- [x] Dismiss stale pull request approvals when new commits are pushed
-- [x] Require review from CODEOWNERS
+Check this box, then configure:
+- **Require approvals**: Set to 1 (or 0 for solo projects)
+- **Dismiss stale pull request approvals when new commits are pushed**: Check this
+- **Require review from CODEOWNERS**: Optional
 
 #### ✅ Require status checks to pass before merging
-- [x] Require branches to be up to date before merging
-- Required status checks:
-  - `build-and-scan` (Docker Security Build)
-  - `test-project-management` (Tests)
-  - `CodeQL` (Security Analysis)
+Check this box, then:
+1. Check **Require branches to be up to date before merging**
+2. Search for and select these status checks:
+   - `Docker Security Build / build-and-scan`
+   - `test-project-management`
+   - `CodeQL / Analyze (python)`
+
+Note: These checks will only appear after they've run at least once.
 
 #### ✅ Require conversation resolution before merging
-- [x] All conversations must be resolved
+Check this box
 
-#### ✅ Security Settings
-- [x] Do not allow bypassing the above settings
-- [x] Restrict who can push to matching branches (optional)
+#### ✅ Additional Settings (scroll down)
+- **Do not allow bypassing the above settings**: Check this
+- **Restrict who can push to matching branches**: Optional (adds extra security)
+- **Allow force pushes**: Leave unchecked
+- **Allow deletions**: Leave unchecked
+
+Click **Create** or **Save changes**
 
 ### Code Scanning Alert Thresholds
 
