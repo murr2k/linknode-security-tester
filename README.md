@@ -5,7 +5,7 @@ A comprehensive website quality and penetration testing tool powered by OWASP ZA
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![OWASP ZAP](https://img.shields.io/badge/OWASP%20ZAP-2.14.0+-green.svg)
 ![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)
-![Version](https://img.shields.io/badge/version-2.0.0-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-2.0.1-brightgreen.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 ## 🚀 Features
@@ -168,7 +168,7 @@ python main.py check-owasp https://example.com
 
 ```bash
 # Start the web interface
-python main.py serve
+python main.py dashboard
 
 # Access at http://localhost:8000
 # View project dashboard, manage clients, and generate reports
@@ -335,6 +335,16 @@ We follow Semantic Versioning (SemVer): `MAJOR.MINOR.PATCH`
 - **PATCH**: Bug fixes (backwards-compatible)
 
 ### Release History
+
+#### v2.0.1 (2024-01-26) - Dashboard & Security Enhancements
+- ✅ Real-time scan progress monitoring with phase tracking
+- ✅ Fixed ZAP integration and progress indicators
+- ✅ GitHub Security features integration (CodeQL, Dependabot)
+- ✅ Branch protection rules configuration
+- ✅ Vulnerability deduplication in reports
+- ✅ Improved scan phase detection (Spider, AJAX, Passive, Active)
+- ✅ Fixed async/threading issues in dashboard
+- ✅ Enhanced error handling and timeout management
 
 #### v2.0.0 (2024-01-26) - Project Management Release
 - ✅ Complete project management system
