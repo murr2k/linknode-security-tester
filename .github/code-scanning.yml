@@ -1,0 +1,97 @@
+# Code Scanning Configuration
+
+# This file documents the recommended security configuration for this repository
+# Apply these settings in: Settings → Code security and analysis
+
+## Alert Severity Thresholds
+
+### Check runs failure threshold: **High or higher**
+This means:
+- ❌ **Critical** severity alerts: Block merge
+- ❌ **High** severity alerts: Block merge  
+- ⚠️ **Medium** severity alerts: Show but don't block
+- ℹ️ **Low** severity alerts: Show but don't block
+
+### Rationale
+- Critical/High vulnerabilities pose immediate security risks
+- Medium/Low vulnerabilities should be addressed but not block development
+- This balances security with development velocity
+
+## Auto-dismiss Alerts
+
+### Stale alerts
+- Auto-dismiss alerts when the code they refer to is deleted
+- Helps keep the alert list clean and actionable
+
+### False positives
+- Use "Dismiss alert" with reason when marking false positives
+- Document why it's a false positive for future reference
+
+## Alert Management
+
+### Priority Order
+1. **Critical**: Fix immediately, may require hotfix
+2. **High**: Fix in current sprint/release
+3. **Medium**: Fix in next release
+4. **Low**: Fix when touching related code
+
+### Review Process
+- Security alerts should be reviewed weekly
+- Assign owners to specific alert types
+- Track remediation in project boards
+
+## Integration with CI/CD
+
+### Required Status Checks
+Add these to branch protection:
+- `CodeQL / Analyze (python)`
+- `Docker Security Build / build-and-scan`
+
+### Workflow Configuration
+Workflows are configured to:
+- Run on every push to main
+- Run on all pull requests
+- Run weekly scheduled scans
+- Upload results to Security tab
+
+## Tool-Specific Settings
+
+### CodeQL
+- Language: Python
+- Query suite: Default (security-extended optional)
+- Autofix: Enabled
+
+### Container Scanning (Trivy)
+- Severity filter: CRITICAL,HIGH
+- Output: SARIF format
+- Category: container-scan
+
+### Dockerfile Linting (Hadolint)
+- Format: SARIF
+- Category: dockerfile-lint
+- No-fail: true (warnings don't block)
+
+## Notifications
+
+### Alert Notifications
+Configure in Settings → Notifications:
+- Email: Security alerts for High/Critical
+- GitHub: All security alerts
+- Webhook: Optional for security tools
+
+## Metrics and Reporting
+
+Track these metrics:
+- Mean Time to Remediate (MTTR) by severity
+- Number of alerts by category
+- False positive rate
+- Security debt (open alerts)
+
+## Exemptions
+
+Some alerts may be exempted if:
+1. Risk is accepted and documented
+2. Compensating controls exist
+3. Fix would break functionality
+
+Document all exemptions in SECURITY.md

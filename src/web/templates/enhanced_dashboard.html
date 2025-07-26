@@ -1241,7 +1241,9 @@
                     window.URL.revokeObjectURL(url);
                     showToast('Report downloaded successfully!', 'success');
                 } else {
-                    showToast('Failed to generate report', 'error');
+                    const errorData = await response.json();
+                    console.error('Report generation error:', errorData);
+                    showToast(`Failed to generate report: ${errorData.detail || 'Unknown error'}`, 'error');
                 }
             } catch (error) {
                 showToast('Error generating report', 'error');

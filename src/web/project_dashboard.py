@@ -297,14 +297,17 @@ async def generate_project_report(project_id: str, report_config: Dict[str, Any]
         project_data = {
             "id": project.id,
             "name": project.name,
-            "client_name": project.client_name,
-            "target_url": project.target_url
+            "client": project.client_name,  # ReportGenerator expects 'client' not 'client_name'
+            "url": project.target_url  # ReportGenerator expects 'url' not 'target_url'
         }
         
         scan_meta = {
-            "scan_type": scans[0].scan_type,
-            "scan_date": scan_data[0]["scan_date"],
-            "duration": scans[0].duration
+            "type": scans[0].scan_type,  # ReportGenerator expects 'type' not 'scan_type'
+            "date": scan_data[0]["scan_date"],  # ReportGenerator expects 'date' not 'scan_date'
+            "duration": scans[0].duration,
+            "risk_score": scans[0].risk_score,
+            "vulnerabilities": scans[0].vulnerability_count,
+            "id": scans[0].id  # Add scan ID as well
         }
         
         # Initialize report generator with required arguments

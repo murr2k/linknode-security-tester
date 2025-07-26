@@ -517,38 +517,59 @@ class ReportGenerator:
     
     def _extract_vulnerabilities(self) -> List[Dict[str, Any]]:
         """Extract and organize vulnerabilities from scan results."""
-        vulnerabilities = []
+        vulnerability_map = {}
         
         # Handle ZAP format
         if 'alerts' in self.results:
             for alert in self.results['alerts']:
-                vulnerabilities.append({
-                    'name': alert.get('name', 'Unknown'),
-                    'risk': alert.get('risk', 'Info'),
-                    'confidence': alert.get('confidence', 'Medium'),
-                    'description': alert.get('desc', ''),
-                    'solution': alert.get('solution', ''),
-                    'reference': alert.get('reference', ''),
-                    'instances': alert.get('instances', []),
-                    'cwe': alert.get('cweid', 0),
-                    'wasc': alert.get('wascid', 0)
-                })
+                # Create a unique key based on name and risk level
+                key = f"{alert.get('name', 'Unknown')}_{alert.get('risk', 'Info')}"
+                
+                if key not in vulnerability_map:
+                    vulnerability_map[key] = {
+                        'name': alert.get('name', 'Unknown'),
+                        'risk': alert.get('risk', 'Info'),
+                        'confidence': alert.get('confidence', 'Medium'),
+                        'description': alert.get('desc', ''),
+                        'solution': alert.get('solution', ''),
+                        'reference': alert.get('reference', ''),
+                        'instances': [],
+                        'cwe': alert.get('cweid', alert.get('cwe_id', 0)),
+                        'wasc': alert.get('wascid', alert.get('wasc_id', 0))
+                    }
+                
+                # Add this instance to the vulnerability
+                instance = {
+                    'url': alert.get('url', ''),
+                    'method': alert.get('method', ''),
+                    'param': alert.get('param', ''),
+                    'attack': alert.get('attack', ''),
+                    'evidence': alert.get('evidence', ''),
+                    'other': alert.get('other', '')
+                }
+                vulnerability_map[key]['instances'].append(instance)
         
         # Handle technology scanner format
         elif 'analysis' in self.results:
             if 'unique_vulnerabilities' in self.results['analysis']:
                 for vuln in self.results['analysis']['unique_vulnerabilities']:
-                    vulnerabilities.append({
-                        'name': vuln.get('vulnerability', {}).get('name', 'Unknown'),
-                        'risk': self._map_severity(vuln.get('vulnerability', {}).get('severity', 'low')),
-                        'confidence': 'High',
-                        'description': vuln.get('vulnerability', {}).get('description', ''),
-                        'solution': vuln.get('remediation', ''),
-                        'reference': vuln.get('references', []),
-                        'instances': vuln.get('affected_files', []),
-                        'cwe': vuln.get('cwe_id', 0),
-                        'wasc': 0
-                    })
+                    key = f"{vuln.get('vulnerability', {}).get('name', 'Unknown')}_{self._map_severity(vuln.get('vulnerability', {}).get('severity', 'low'))}"
+                    
+                    if key not in vulnerability_map:
+                        vulnerability_map[key] = {
+                            'name': vuln.get('vulnerability', {}).get('name', 'Unknown'),
+                            'risk': self._map_severity(vuln.get('vulnerability', {}).get('severity', 'low')),
+                            'confidence': 'High',
+                            'description': vuln.get('vulnerability', {}).get('description', ''),
+                            'solution': vuln.get('remediation', ''),
+                            'reference': vuln.get('references', []),
+                            'instances': vuln.get('affected_files', []),
+                            'cwe': vuln.get('cwe_id', 0),
+                            'wasc': 0
+                        }
+        
+        # Convert map to list
+        vulnerabilities = list(vulnerability_map.values())
         
         # Sort by risk level
         risk_order = {'Critical': 0, 'High': 1, 'Medium': 2, 'Low': 3, 'Informational': 4}
@@ -636,18 +657,64 @@ class ReportGenerator:
         if not instances:
             return ""
         
-        html = "<h4>Affected Locations</h4><ul>"
-        for instance in instances[:5]:  # Limit to first 5
-            if isinstance(instance, dict):
-                uri = instance.get('uri', instance.get('url', str(instance)))
-            else:
-                uri = str(instance)
-            html += f"<li>{uri}</li>"
+        html = "<h4>Affected Locations</h4>"
         
-        if len(instances) > 5:
-            html += f"<li>... and {len(instances) - 5} more</li>"
+        # Group instances by URL for cleaner display
+        url_map = {}
+        for instance in instances:
+            if isinstance(instance, dict):
+                url = instance.get('uri', instance.get('url', ''))
+                method = instance.get('method', '')
+                param = instance.get('param', '')
+                attack = instance.get('attack', '')
+                evidence = instance.get('evidence', '')
+                other = instance.get('other', '')
+                
+                if url:
+                    if url not in url_map:
+                        url_map[url] = []
+                    url_map[url].append({
+                        'method': method,
+                        'param': param,
+                        'attack': attack,
+                        'evidence': evidence,
+                        'other': other
+                    })
+            else:
+                # Handle simple string instances
+                url = str(instance)
+                if url:
+                    url_map[url] = [{}]
+        
+        # Format the output
+        html += f"<p><strong>{len(url_map)} unique URL(s) affected:</strong></p><ul>"
+        
+        for i, (url, details) in enumerate(list(url_map.items())[:10]):  # Limit to first 10 URLs
+            html += f"<li><code>{url}</code>"
+            
+            # Add additional details if available
+            for detail in details[:1]:  # Show first instance details for each URL
+                if detail.get('method'):
+                    html += f" [{detail['method']}]"
+                if detail.get('param'):
+                    html += f" (Parameter: {detail['param']})"
+                if detail.get('attack'):
+                    html += f"<br>&nbsp;&nbsp;&nbsp;&nbsp;Attack: <code>{detail['attack']}</code>"
+                if detail.get('evidence'):
+                    html += f"<br>&nbsp;&nbsp;&nbsp;&nbsp;Evidence: <code>{detail['evidence']}</code>"
+            
+            html += "</li>"
+        
+        if len(url_map) > 10:
+            html += f"<li>... and {len(url_map) - 10} more URL(s)</li>"
         
         html += "</ul>"
+        
+        # Add additional info if present
+        first_instance = instances[0] if instances else {}
+        if isinstance(first_instance, dict) and first_instance.get('other'):
+            html += f"<h4>Additional Information</h4><p>{first_instance['other']}</p>"
+        
         return html
     
     def _generate_recommendations_html(self, summary: Dict[str, Any]) -> str:
