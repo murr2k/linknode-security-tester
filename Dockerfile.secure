@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Stage 2: Build security tools
-FROM ubuntu:22.04 as tools-builder
+FROM ubuntu:24.04 as tools-builder
 
 # Install tool dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
