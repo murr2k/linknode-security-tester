@@ -336,11 +336,73 @@ def run_scan_task(job_id: str, project_id: str, scan_config: Dict[str, Any]):
         # Set active project
         project_scanner.set_project(project_id)
         
-        # Update progress
-        active_scans[job_id]["progress"] = 10
-        
-        # Run the scan
+        # Update progress based on scan type
         scan_type = scan_config.get("scan_type", "quick")
+        
+        # Simulate progress updates for different scan stages
+        if scan_type == "quick":
+            progress_stages = [
+                (10, "Initializing scanner"),
+                (20, "Target reconnaissance"), 
+                (40, "Port scanning"),
+                (60, "Service detection"),
+                (80, "Basic vulnerability scan"),
+                (90, "Generating report")
+            ]
+        elif scan_type == "full":
+            progress_stages = [
+                (5, "Initializing scanner"),
+                (10, "Target reconnaissance"),
+                (15, "DNS enumeration"),
+                (30, "Port scanning (all ports)"),
+                (40, "Service detection"),
+                (45, "OS fingerprinting"),
+                (60, "Vulnerability scanning"),
+                (70, "Web application scan"),
+                (80, "SSL/TLS analysis"),
+                (85, "Security headers check"),
+                (95, "Generating comprehensive report")
+            ]
+        elif scan_type == "technology":
+            progress_stages = [
+                (10, "Initializing scanner"),
+                (20, "Technology detection"),
+                (35, "Framework identification"),
+                (50, "Version fingerprinting"),
+                (65, "Known CVE checking"),
+                (80, "Technology-specific tests"),
+                (90, "Dependency analysis"),
+                (95, "Generating report")
+            ]
+        else:  # compliance
+            progress_stages = [
+                (10, "Initializing scanner"),
+                (20, "OWASP Top 10 checks"),
+                (30, "Authentication testing"),
+                (40, "Authorization testing"),
+                (50, "Session management"),
+                (60, "Input validation"),
+                (75, "Security configuration"),
+                (85, "Compliance mapping"),
+                (95, "Generating compliance report")
+            ]
+        
+        # Update progress for first stage
+        active_scans[job_id]["progress"] = progress_stages[0][0]
+        active_scans[job_id]["current_stage"] = progress_stages[0][1]
+        
+        # Run the actual scan (this would normally update progress internally)
+        # For now, we'll simulate progress updates
+        import time
+        
+        # Simulate scan execution with progress updates
+        for progress, stage in progress_stages[1:]:
+            time.sleep(2)  # Simulate work being done
+            if job_id in active_scans:
+                active_scans[job_id]["progress"] = progress
+                active_scans[job_id]["current_stage"] = stage
+        
+        # Run the actual scan
         results = project_scanner.scan(scan_type=scan_type)
         
         # Update scan status

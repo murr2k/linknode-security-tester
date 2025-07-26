@@ -530,6 +530,69 @@
             100% { transform: rotate(360deg); }
         }
         
+        .scan-progress-item {
+            padding: 8px 12px;
+            margin: 4px 0;
+            background: #f7fafc;
+            border-radius: 6px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-left: 3px solid #e2e8f0;
+            transition: all 0.3s;
+        }
+        
+        .scan-progress-item.active {
+            background: #e3f2fd;
+            border-left-color: #3498db;
+            animation: pulse 2s infinite;
+        }
+        
+        .scan-progress-item.completed {
+            background: #f0fdf4;
+            border-left-color: #48bb78;
+        }
+        
+        .scan-progress-item.error {
+            background: #fee;
+            border-left-color: #e53e3e;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        
+        .scan-info {
+            background: #f7fafc;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+        
+        .scan-info-label {
+            color: #718096;
+            font-weight: 500;
+        }
+        
+        .progress-bar {
+            height: 4px;
+            background: #e2e8f0;
+            border-radius: 2px;
+            margin: 8px 0;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: #3498db;
+            border-radius: 2px;
+            transition: width 0.3s;
+        }
+        
         .toast {
             position: fixed;
             bottom: 20px;
@@ -644,14 +707,15 @@
                 </div>
             </div>
             
-            <div class="stat-card">
+            <div class="stat-card" id="active-scans-card">
                 <div class="stat-header">
-                    <div>
+                    <div style="flex: 1;">
                         <div class="stat-value" id="active-scans">0</div>
                         <div class="stat-label">Active Scans</div>
-                        <div class="stat-trend" style="color: #3498db;">
-                            <span class="loading" id="scan-spinner" style="display: none;"></span>
-                            <span id="scan-status">No scans running</span>
+                        <div id="scan-details" style="margin-top: 12px; max-height: 200px; overflow-y: auto;">
+                            <div class="stat-trend" style="color: #718096;">
+                                <span id="scan-status">No scans running</span>
+                            </div>
                         </div>
                     </div>
                     <div class="stat-icon" style="background: #fee5e5; color: #e53e3e;">🔍</div>
@@ -866,7 +930,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             loadProjectStats();
             updateScanStatuses();
-            setInterval(updateScanStatuses, 10000); // Update every 10 seconds
+            setInterval(updateScanStatuses, 2000); // Update every 2 seconds for better progress tracking
         });
         
         // Load project statistics
@@ -1141,17 +1205,126 @@
                 const activeScans = await response.json();
                 
                 document.getElementById('active-scans').textContent = activeScans.length;
+                const scanDetails = document.getElementById('scan-details');
                 
                 if (activeScans.length > 0) {
-                    document.getElementById('scan-spinner').style.display = 'inline-block';
-                    document.getElementById('scan-status').textContent = `${activeScans.length} scan(s) running`;
+                    let detailsHTML = '';
+                    
+                    for (const scan of activeScans) {
+                        const scanSteps = getScanSteps(scan.scan_type);
+                        const currentStep = Math.floor((scan.progress / 100) * scanSteps.length);
+                        
+                        detailsHTML += `
+                            <div class="scan-info">
+                                <div><span class="scan-info-label">Project:</span> ${scan.project_name}</div>
+                                <div><span class="scan-info-label">Type:</span> ${scan.scan_type.toUpperCase()} scan</div>
+                                <div><span class="scan-info-label">Started:</span> ${getTimeAgo(new Date(scan.started_at))}</div>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: ${scan.progress}%"></div>
+                            </div>
+                            <div style="font-size: 11px; color: #718096; margin-bottom: 8px;">Progress: ${scan.progress}%</div>
+                        `;
+                        
+                        // Add scrolling todo list of steps
+                        detailsHTML += '<div style="max-height: 120px; overflow-y: auto;">';
+                        scanSteps.forEach((step, index) => {
+                            let className = 'scan-progress-item';
+                            let icon = '○';
+                            
+                            if (index < currentStep) {
+                                className += ' completed';
+                                icon = '✓';
+                            } else if (index === currentStep) {
+                                className += ' active';
+                                icon = '<span class="loading" style="width: 12px; height: 12px;"></span>';
+                            }
+                            
+                            if (scan.status === 'failed' && index === currentStep) {
+                                className = 'scan-progress-item error';
+                                icon = '✗';
+                            }
+                            
+                            detailsHTML += `
+                                <div class="${className}">
+                                    <span>${icon}</span>
+                                    <span>${step}</span>
+                                </div>
+                            `;
+                        });
+                        detailsHTML += '</div>';
+                        
+                        if (scan.status === 'failed' && scan.error) {
+                            detailsHTML += `
+                                <div class="scan-progress-item error" style="margin-top: 8px;">
+                                    <span>✗</span>
+                                    <span>Error: ${scan.error}</span>
+                                </div>
+                            `;
+                        }
+                    }
+                    
+                    scanDetails.innerHTML = detailsHTML;
                 } else {
-                    document.getElementById('scan-spinner').style.display = 'none';
-                    document.getElementById('scan-status').textContent = 'No scans running';
+                    scanDetails.innerHTML = `
+                        <div class="stat-trend" style="color: #718096;">
+                            <span>No scans running</span>
+                        </div>
+                    `;
                 }
             } catch (error) {
                 console.error('Error updating scan statuses:', error);
             }
+        }
+        
+        // Get scan steps based on scan type
+        function getScanSteps(scanType) {
+            const steps = {
+                'quick': [
+                    'Initializing scanner',
+                    'Target reconnaissance',
+                    'Port scanning',
+                    'Service detection',
+                    'Basic vulnerability scan',
+                    'Generating report'
+                ],
+                'full': [
+                    'Initializing scanner',
+                    'Target reconnaissance',
+                    'DNS enumeration',
+                    'Port scanning (all ports)',
+                    'Service detection',
+                    'OS fingerprinting',
+                    'Vulnerability scanning',
+                    'Web application scan',
+                    'SSL/TLS analysis',
+                    'Security headers check',
+                    'Generating comprehensive report'
+                ],
+                'technology': [
+                    'Initializing scanner',
+                    'Technology detection',
+                    'Framework identification',
+                    'Version fingerprinting',
+                    'Known CVE checking',
+                    'Technology-specific tests',
+                    'Dependency analysis',
+                    'Generating report'
+                ],
+                'compliance': [
+                    'Initializing scanner',
+                    'OWASP Top 10 checks',
+                    'Authentication testing',
+                    'Authorization testing',
+                    'Session management',
+                    'Input validation',
+                    'Security configuration',
+                    'Compliance mapping',
+                    'Generating compliance report'
+                ]
+            };
+            
+            return steps[scanType] || steps['quick'];
         }
         
         // Refresh dashboard
