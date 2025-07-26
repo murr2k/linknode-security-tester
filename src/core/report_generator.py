@@ -143,7 +143,7 @@ class ReportGenerator:
                 </tr>
                 <tr>
                     <td class="label">Client:</td>
-                    <td>{self.project['client']}</td>
+                    <td>{self.project.get('client', self.project.get('client_name', 'N/A'))}</td>
                 </tr>
                 <tr>
                     <td class="label">Target URL:</td>

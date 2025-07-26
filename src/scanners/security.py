@@ -14,12 +14,13 @@ logger = logging.getLogger(__name__)
 class SecurityScanner:
     """Security vulnerability scanner."""
     
-    def __init__(self, zap_client: Optional[ZAPClient] = None):
+    def __init__(self, zap_client: Optional[ZAPClient] = None, scan_type: str = 'full'):
         """Initialize security scanner."""
         self.zap = zap_client or ZAPClient()
         self.scan_results = {}
         self.start_time = None
         self.end_time = None
+        self.scan_type = scan_type
     
     def scan(self, target_url: str, scan_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Run comprehensive security scan."""
@@ -71,7 +72,9 @@ class SecurityScanner:
             # Phase 4: Active scan
             if config['active_scan']:
                 logger.info("Phase 4: Running active scan")
-                active_results = self.zap.active_scan(target_url)
+                # Use shorter timeout for quick scans
+                timeout = 180 if self.scan_type == 'quick' else 300
+                active_results = self.zap.active_scan(target_url, max_duration=timeout)
                 results['phases']['active_scan'] = active_results
             
             # Compile all alerts

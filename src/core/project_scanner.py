@@ -150,7 +150,7 @@ class ProjectScanner:
                 results = scanner.scan(self.active_project.target_url, options)
             else:
                 # Standard security scan
-                scanner = SecurityScanner()
+                scanner = SecurityScanner(scan_type=scan_type)
                 self.current_scanner = scanner  # Store for progress updates
                 
                 # Configure scanner with project settings

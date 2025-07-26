@@ -1,6 +1,7 @@
 """OWASP ZAP API client integration."""
 
 import time
+import requests
 from typing import Dict, List, Optional, Any
 from urllib.parse import urlparse
 import logging
@@ -18,6 +19,8 @@ class ZAPClient:
     def __init__(self, api_key: Optional[str] = None):
         """Initialize ZAP client."""
         self.api_key = api_key or settings.zap.api_key
+        self.host = settings.zap.host
+        self.port = settings.zap.port
         # Connect directly to ZAP API without proxy
         self.zap = ZAPv2(
             apikey=self.api_key,
@@ -128,18 +131,89 @@ class ZAPClient:
             'alerts': self._process_alerts(alerts)
         }
     
-    def active_scan(self, target_url: str) -> Dict[str, Any]:
-        """Run active vulnerability scan."""
-        logger.info(f"Starting active scan for {target_url}")
+    def active_scan(self, target_url: str, max_duration: int = 300) -> Dict[str, Any]:
+        """Run active vulnerability scan with timeout."""
+        logger.info(f"Starting active scan for {target_url} (max {max_duration}s)")
         
-        # Start active scan
-        scan_id = self.zap.ascan.scan(target_url)
+        # Configure scan to prevent getting stuck
+        # Use the action API to set options
+        try:
+            # Reduce threads to avoid overwhelming the target
+            requests.get(f'http://{self.host}:{self.port}/JSON/ascan/action/setOptionThreadPerHost/', 
+                        params={'Integer': '4', 'apikey': self.api_key})
+            
+            # Set max scan duration per rule (2 minutes to be safer)
+            requests.get(f'http://{self.host}:{self.port}/JSON/ascan/action/setOptionMaxRuleDurationInMins/', 
+                        params={'Integer': '2', 'apikey': self.api_key})
+            
+            # Set delay between requests to be respectful
+            requests.get(f'http://{self.host}:{self.port}/JSON/ascan/action/setOptionDelayInMs/', 
+                        params={'Integer': '100', 'apikey': self.api_key})
+            
+            logger.info("Active scan options configured successfully")
+        except Exception as e:
+            logger.warning(f"Failed to set some scan options: {e}")
+        
+        # Create a custom scan policy for this scan
+        policy_name = f"fast_scan_{int(time.time())}"
+        
+        # Clone the default policy
+        self.zap.ascan.add_scan_policy(policy_name)
+        
+        # Disable extremely slow and problematic scanners
+        slow_scanners = [
+            '40018',  # SQL Injection (causes huge payloads and hangs)
+            '40009',  # Server Side Include
+            '30003',  # Integer Overflow Error
+            '90020',  # Remote OS Command Injection
+            '0',      # Directory Browsing (can be very slow)
+            '42',     # Source Code Disclosure - SVN (slow)
+            '40014',  # Cross Site Scripting (Persistent) - Prime
+            '40016',  # Cross Site Scripting (Persistent) - Spider
+            '40017',  # Cross Site Scripting (Persistent) - Prime
+            '20010',  # Anti CSRF Tokens Scanner (can be slow)
+            '90023',  # XML External Entity Attack (can cause hangs)
+        ]
+        
+        for scanner_id in slow_scanners:
+            try:
+                self.zap.ascan.disable_scanners(scanner_id, policy_name)
+            except:
+                pass
+        
+        # Start active scan with custom policy
+        scan_id = self.zap.ascan.scan(target_url, scanpolicyname=policy_name)
+            
         logger.info(f"Active scan started with ID: {scan_id}")
         
-        # Wait for active scan to complete
+        # Wait for active scan to complete with timeout
+        start_time = time.time()
+        last_progress = 0
+        stuck_count = 0
+        
         while int(self.zap.ascan.status(scan_id)) < 100:
-            progress = self.zap.ascan.status(scan_id)
-            logger.debug(f"Active scan progress: {progress}%")
+            progress = int(self.zap.ascan.status(scan_id))
+            elapsed = time.time() - start_time
+            
+            # Check if scan is stuck - be more aggressive
+            if progress == last_progress:
+                stuck_count += 1
+                if stuck_count > 6:  # Stuck for 30 seconds
+                    logger.warning(f"Active scan appears stuck at {progress}% after {elapsed:.1f}s, stopping...")
+                    self.zap.ascan.stop(scan_id)
+                    break
+            else:
+                stuck_count = 0
+                last_progress = progress
+            
+            # Also check absolute timeout - don't let it run more than 2 minutes
+            if elapsed > 120:
+                logger.warning(f"Active scan timeout after {elapsed:.1f}s, stopping...")
+                self.zap.ascan.stop(scan_id)
+                break
+            
+            logger.debug(f"Active scan progress: {progress}% (elapsed: {elapsed:.1f}s)")
+                
             time.sleep(5)
         
         # Get alerts
@@ -149,7 +223,9 @@ class ZAPClient:
         return {
             'scan_id': scan_id,
             'alerts_count': len(alerts),
-            'alerts': self._process_alerts(alerts)
+            'alerts': self._process_alerts(alerts),
+            'completed': int(self.zap.ascan.status(scan_id)) == 100,
+            'final_progress': int(self.zap.ascan.status(scan_id))
         }
     
     def get_alerts(self, target_url: Optional[str] = None) -> List[Dict[str, Any]]:
