@@ -2,7 +2,7 @@
 # Each tool in its own minimal container
 
 # Base stage for common dependencies
-FROM alpine:3.19 as base
+FROM alpine:3.22 as base
 RUN apk add --no-cache ca-certificates
 
 # WhatWeb stage
@@ -75,7 +75,7 @@ WORKDIR /opt/nikto/program
 ENTRYPOINT ["./nikto.pl"]
 
 # NMAP stage (optional, for network scanning)
-FROM alpine:3.19 as nmap
+FROM alpine:3.22 as nmap
 
 RUN apk add --no-cache \
     nmap \
@@ -107,7 +107,7 @@ WORKDIR /opt/sqlmap
 ENTRYPOINT ["python", "sqlmap.py"]
 
 # Dirb stage (directory brute-forcing)
-FROM alpine:3.19 as dirb
+FROM alpine:3.22 as dirb
 
 RUN apk add --no-cache \
     curl \
@@ -123,7 +123,7 @@ USER scanner
 ENTRYPOINT ["gobuster"]
 
 # Combined tools image (not recommended for production)
-FROM alpine:3.19 as all-tools
+FROM alpine:3.22 as all-tools
 
 RUN apk add --no-cache \
     ruby \
