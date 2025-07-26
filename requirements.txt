@@ -45,7 +45,7 @@ aiofiles==23.2.1
 asyncio==3.4.3
 
 # Security analysis
-bandit==1.7.5
+bandit==1.8.6
 safety==2.3.5  # Compatible with pydantic 2.x
 
 # Phase 1 Tools Integration
