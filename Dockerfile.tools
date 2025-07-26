@@ -6,7 +6,7 @@ FROM alpine:3.19 as base
 RUN apk add --no-cache ca-certificates
 
 # WhatWeb stage
-FROM ruby:3.2-alpine as whatweb
+FROM ruby:3.4-alpine as whatweb
 
 # Install dependencies
 RUN apk add --no-cache \
@@ -25,7 +25,7 @@ RUN git clone --depth 1 https://github.com/urbanadventurer/WhatWeb.git /opt/what
     rm -rf .git .gitignore README* CHANGELOG* tests/
 
 # Create minimal runtime
-FROM ruby:3.2-alpine as whatweb-runtime
+FROM ruby:3.4-alpine as whatweb-runtime
 
 RUN apk add --no-cache \
     libcurl \
