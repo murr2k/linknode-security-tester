@@ -453,7 +453,8 @@ def run_scan_task(job_id: str, project_id: str, scan_config: Dict[str, Any]):
                         # 40-50 seconds - Passive scan
                         active_scans[job_id]["current_stage"] = "Passive scan"
                         active_scans[job_id]["phase_details"]["current_phase"] = "Passive Scan"
-                        active_scans[job_id]["progress"] = min(35, 25 + (elapsed - 40))
+                        # Progress from 25 to 35 over 10 seconds
+                        active_scans[job_id]["progress"] = 25 + min(10, max(0, elapsed - 40))
                         
                         # Check passive scan queue
                         try:
@@ -469,22 +470,34 @@ def run_scan_task(job_id: str, project_id: str, scan_config: Dict[str, Any]):
                         
                         # Check for actual active scan progress
                         try:
-                            # Get all scan IDs
-                            scans = json.loads(zap.ascan.scans())
-                            if scans and len(scans) > 0:
-                                # Get the latest scan
-                                latest_scan = scans[-1]
-                                scan_id = latest_scan.get('id')
-                                progress = int(latest_scan.get('progress', 0))
-                                
+                            # Get active scan status
+                            ascan_progress = zap.ascan.status()
+                            if ascan_progress:
+                                progress = int(ascan_progress)
                                 active_scans[job_id]["phase_details"]["phase_progress"] = progress
                                 active_scans[job_id]["phase_details"]["activity"] = f"Testing for vulnerabilities... {progress}%"
                                 # Progress from 35 to 95 based on active scan progress
                                 active_scans[job_id]["progress"] = 35 + int(progress * 0.6)
                             else:
-                                # No active scan yet, still in prep
-                                active_scans[job_id]["phase_details"]["activity"] = "Preparing vulnerability tests..."
-                                active_scans[job_id]["progress"] = 35
+                                # Try alternative method - get scan list
+                                try:
+                                    scans = zap.ascan.scans()
+                                    if isinstance(scans, str):
+                                        scans = json.loads(scans)
+                                    if scans and len(scans) > 0:
+                                        # Get the latest scan
+                                        latest_scan = scans[-1]
+                                        progress = int(latest_scan.get('progress', 0))
+                                        active_scans[job_id]["phase_details"]["phase_progress"] = progress
+                                        active_scans[job_id]["phase_details"]["activity"] = f"Testing for vulnerabilities... {progress}%"
+                                        active_scans[job_id]["progress"] = 35 + int(progress * 0.6)
+                                    else:
+                                        active_scans[job_id]["phase_details"]["activity"] = "Preparing vulnerability tests..."
+                                        active_scans[job_id]["progress"] = 35
+                                except:
+                                    # Fallback if scan list not available
+                                    active_scans[job_id]["phase_details"]["activity"] = "Running security tests..."
+                                    active_scans[job_id]["progress"] = min(90, 35 + (elapsed - 50) // 2)
                         except Exception as e:
                             print(f"Active scan status error: {e}")
                             active_scans[job_id]["phase_details"]["activity"] = "Running security tests..."
