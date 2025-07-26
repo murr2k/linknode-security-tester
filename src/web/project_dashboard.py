@@ -9,6 +9,8 @@ from typing import Optional, List, Dict, Any
 import json
 import asyncio
 import uuid
+import time
+import threading
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 
@@ -429,19 +431,21 @@ def run_scan_task(job_id: str, project_id: str, scan_config: Dict[str, Any]):
                 print(f"Failed to generate report: {e}")
         
         # Remove from active scans after 5 minutes
-        asyncio.create_task(cleanup_scan_job(job_id))
+        # Note: Can't use asyncio in thread pool, schedule cleanup differently
+        import threading
+        def delayed_cleanup():
+            time.sleep(300)  # 5 minutes
+            if job_id in active_scans:
+                del active_scans[job_id]
+        
+        cleanup_thread = threading.Thread(target=delayed_cleanup)
+        cleanup_thread.daemon = True
+        cleanup_thread.start()
         
     except Exception as e:
         active_scans[job_id]["status"] = "failed"
         active_scans[job_id]["error"] = str(e)
         active_scans[job_id]["completed_at"] = datetime.now().isoformat()
-
-
-async def cleanup_scan_job(job_id: str):
-    """Remove completed scan job after delay."""
-    await asyncio.sleep(300)  # 5 minutes
-    if job_id in active_scans:
-        del active_scans[job_id]
 
 
 # App startup event
